@@ -1,13 +1,15 @@
 package com.fleet.modules.telemetry.service;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 import com.fleet.modules.alert.service.AlertService;
 import com.fleet.modules.telemetry.dto.TelemetryDTO;
 import com.fleet.modules.telemetry.entity.Telemetry;
 import com.fleet.modules.telemetry.repository.TelemetryRepository;
+import java.time.LocalDateTime;
+import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @Service
 public class TelemetryService {
@@ -19,18 +21,20 @@ public class TelemetryService {
     private AlertService alertService;
 
     public void saveTelemetry(TelemetryDTO dto) {
+        if (dto == null || dto.getVehicleId() == null || dto.getVehicleId().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vehicle ID is required.");
+        }
 
-        Telemetry t = new Telemetry();
-        t.setVehicleId(dto.getVehicleId());
-        t.setLatitude(dto.getLatitude());
-        t.setLongitude(dto.getLongitude());
-        t.setSpeed(dto.getSpeed());
-        t.setFuelLevel(dto.getFuelLevel());
-        t.setTimestamp(LocalDateTime.now());
+        Telemetry telemetry = new Telemetry();
+        telemetry.setVehicleId(dto.getVehicleId());
+        telemetry.setLatitude(dto.getLatitude());
+        telemetry.setLongitude(dto.getLongitude());
+        telemetry.setSpeed(dto.getSpeed());
+        telemetry.setFuelLevel(dto.getFuelLevel());
+        telemetry.setTimestamp(dto.getTimestamp() != null ? dto.getTimestamp() : LocalDateTime.now());
 
-        repo.save(t);
-
-        alertService.checkAlerts(t);
+        repo.save(telemetry);
+        alertService.checkAlerts(telemetry);
     }
 
     public List<TelemetryDTO> getTelemetry(String vehicleId) {

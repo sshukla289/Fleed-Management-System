@@ -75,6 +75,42 @@ public class MaintenanceService {
         maintenanceAlertRepository.deleteById(id);
     }
 
+    public MaintenanceAlertDTO createSystemAlertIfAbsent(
+        String vehicleId,
+        String title,
+        String severity,
+        String description
+    ) {
+        validateAlertRequest(
+            vehicleId,
+            title,
+            severity,
+            LocalDate.now().plusDays(1).toString(),
+            description
+        );
+
+        if (maintenanceAlertRepository.existsByVehicleIdAndTitle(vehicleId, title)) {
+            MaintenanceAlert existingAlert = maintenanceAlertRepository.findByVehicleIdAndTitle(vehicleId, title)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Maintenance alert not found."));
+
+            existingAlert.setSeverity(severity);
+            existingAlert.setDescription(description);
+            existingAlert.setDueDate(LocalDate.now().plusDays(1));
+            return toDto(maintenanceAlertRepository.save(existingAlert));
+        }
+
+        MaintenanceAlert alert = new MaintenanceAlert(
+            nextId(),
+            vehicleId,
+            title,
+            severity,
+            LocalDate.now().plusDays(1),
+            description
+        );
+
+        return toDto(maintenanceAlertRepository.save(alert));
+    }
+
     private MaintenanceAlertDTO toDto(MaintenanceAlert alert) {
         return new MaintenanceAlertDTO(
             alert.getId(),

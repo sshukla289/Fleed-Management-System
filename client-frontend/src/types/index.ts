@@ -27,6 +27,15 @@ export interface TelemetryData {
   engineTemperature: number
 }
 
+export interface CreateTelemetryInput {
+  vehicleId: string
+  latitude: number
+  longitude: number
+  speed: number
+  fuelLevel: number
+  timestamp?: string
+}
+
 export interface MaintenanceAlert {
   id: string
   vehicleId: string

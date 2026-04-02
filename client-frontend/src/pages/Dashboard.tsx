@@ -1,17 +1,29 @@
 import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
 import { TelemetryChart } from '../components/TelemetryChart'
 import { VehicleCard } from '../components/VehicleCard'
 import { fetchDrivers, fetchMaintenanceAlerts, fetchVehicles } from '../services/apiService'
-import { fetchVehicleTelemetry } from '../services/telemetryService'
-import type { Driver, MaintenanceAlert, TelemetryData, Vehicle } from '../types'
+import { fetchVehicleTelemetry, submitVehicleTelemetry } from '../services/telemetryService'
+import type { CreateTelemetryInput, Driver, MaintenanceAlert, TelemetryData, Vehicle } from '../types'
 
 export function Dashboard() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [alerts, setAlerts] = useState<MaintenanceAlert[]>([])
   const [telemetry, setTelemetry] = useState<TelemetryData[]>([])
+  const [selectedVehicleId, setSelectedVehicleId] = useState('')
+  const [telemetryForm, setTelemetryForm] = useState<Omit<CreateTelemetryInput, 'vehicleId'>>({
+    latitude: 12.9716,
+    longitude: 77.5946,
+    speed: 84,
+    fuelLevel: 18,
+    timestamp: '',
+  })
+  const [isSubmittingTelemetry, setIsSubmittingTelemetry] = useState(false)
+  const [telemetryMessage, setTelemetryMessage] = useState('')
+  const [telemetryError, setTelemetryError] = useState('')
 
   useEffect(() => {
     async function loadDashboard() {
@@ -26,6 +38,7 @@ export function Dashboard() {
       setAlerts(alertData)
 
       if (vehicleData[0]) {
+        setSelectedVehicleId(vehicleData[0].id)
         const telemetryData = await fetchVehicleTelemetry(vehicleData[0].id)
         setTelemetry(telemetryData)
       }
@@ -33,6 +46,19 @@ export function Dashboard() {
 
     void loadDashboard()
   }, [])
+
+  useEffect(() => {
+    if (!selectedVehicleId) {
+      return
+    }
+
+    async function loadVehicleTelemetry() {
+      const telemetryData = await fetchVehicleTelemetry(selectedVehicleId)
+      setTelemetry(telemetryData)
+    }
+
+    void loadVehicleTelemetry()
+  }, [selectedVehicleId])
 
   const activeVehicles = vehicles.filter((vehicle) => vehicle.status === 'Active').length
   const driversOnDuty = drivers.filter((driver) => driver.status === 'On Duty').length
@@ -61,6 +87,56 @@ export function Dashboard() {
     link.download = 'fleet-dashboard-report.json'
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  function handleTelemetryFieldChange(
+    field: keyof Omit<CreateTelemetryInput, 'vehicleId'>,
+    value: string,
+  ) {
+    setTelemetryForm((current) => ({
+      ...current,
+      [field]:
+        field === 'timestamp'
+          ? value
+          : value === ''
+            ? 0
+            : Number(value),
+    }))
+  }
+
+  async function handleTelemetrySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!selectedVehicleId) {
+      setTelemetryError('Select a vehicle before sending telemetry.')
+      setTelemetryMessage('')
+      return
+    }
+
+    setIsSubmittingTelemetry(true)
+    setTelemetryError('')
+    setTelemetryMessage('')
+
+    try {
+      await submitVehicleTelemetry({
+        vehicleId: selectedVehicleId,
+        ...telemetryForm,
+        timestamp: telemetryForm.timestamp || undefined,
+      })
+
+      const [updatedTelemetry, updatedAlerts] = await Promise.all([
+        fetchVehicleTelemetry(selectedVehicleId),
+        fetchMaintenanceAlerts(),
+      ])
+
+      setTelemetry(updatedTelemetry)
+      setAlerts(updatedAlerts)
+      setTelemetryMessage('Telemetry event saved and fleet alerts refreshed.')
+    } catch (error) {
+      setTelemetryError(error instanceof Error ? error.message : 'Unable to save telemetry event.')
+    } finally {
+      setIsSubmittingTelemetry(false)
+    }
   }
 
   return (
@@ -132,6 +208,104 @@ export function Dashboard() {
           <TelemetryChart data={telemetry} metric="fuelUsage" title="Fuel usage trend" />
         </section>
       ) : null}
+
+      <section className="panel">
+        <div className="panel__header">
+          <div>
+            <h3>Live telemetry simulator</h3>
+            <p className="muted">
+              Send a telemetry reading for a vehicle to update charts and trigger maintenance alerts when thresholds are crossed.
+            </p>
+          </div>
+        </div>
+
+        <form className="inline-form" onSubmit={handleTelemetrySubmit}>
+          <div className="form-grid">
+            <label className="input-group">
+              <span>Vehicle</span>
+              <select
+                value={selectedVehicleId}
+                onChange={(event) => setSelectedVehicleId(event.target.value)}
+              >
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.name} ({vehicle.id})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="input-group">
+              <span>Speed (km/h)</span>
+              <input
+                type="number"
+                min="0"
+                value={telemetryForm.speed}
+                onChange={(event) => handleTelemetryFieldChange('speed', event.target.value)}
+              />
+            </label>
+            <label className="input-group">
+              <span>Fuel level (%)</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={telemetryForm.fuelLevel}
+                onChange={(event) => handleTelemetryFieldChange('fuelLevel', event.target.value)}
+              />
+            </label>
+            <label className="input-group">
+              <span>Latitude</span>
+              <input
+                type="number"
+                step="0.0001"
+                value={telemetryForm.latitude}
+                onChange={(event) => handleTelemetryFieldChange('latitude', event.target.value)}
+              />
+            </label>
+            <label className="input-group">
+              <span>Longitude</span>
+              <input
+                type="number"
+                step="0.0001"
+                value={telemetryForm.longitude}
+                onChange={(event) => handleTelemetryFieldChange('longitude', event.target.value)}
+              />
+            </label>
+            <label className="input-group">
+              <span>Timestamp</span>
+              <input
+                type="datetime-local"
+                value={telemetryForm.timestamp ?? ''}
+                onChange={(event) => handleTelemetryFieldChange('timestamp', event.target.value)}
+              />
+            </label>
+          </div>
+
+          {telemetryError ? <div className="form-error">{telemetryError}</div> : null}
+          {telemetryMessage ? <div className="form-success">{telemetryMessage}</div> : null}
+
+          <div className="form-actions">
+            <button className="primary-button" type="submit" disabled={isSubmittingTelemetry}>
+              {isSubmittingTelemetry ? 'Sending telemetry...' : 'Send telemetry event'}
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() =>
+                setTelemetryForm({
+                  latitude: 12.9716,
+                  longitude: 77.5946,
+                  speed: 84,
+                  fuelLevel: 18,
+                  timestamp: '',
+                })
+              }
+            >
+              Reset sample values
+            </button>
+          </div>
+        </form>
+      </section>
 
       <section className="panel">
         <div className="panel__header">

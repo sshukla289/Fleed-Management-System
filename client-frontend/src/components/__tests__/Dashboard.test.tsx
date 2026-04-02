@@ -11,6 +11,6 @@ describe('Dashboard', () => {
     )
 
     expect(screen.getByRole('heading', { name: /fleet dashboard/i })).toBeInTheDocument()
-    expect(await screen.findByText(/atlas prime/i)).toBeInTheDocument()
+    expect((await screen.findAllByText(/atlas prime/i)).length).toBeGreaterThan(0)
   })
 })
