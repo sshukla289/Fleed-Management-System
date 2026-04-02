@@ -117,3 +117,9 @@ export interface UpdateProfileInput {
   email: string
   assignedRegion: string
 }
+
+export interface ChangePasswordInput {
+  currentPassword: string
+  newPassword: string
+  confirmPassword: string
+}

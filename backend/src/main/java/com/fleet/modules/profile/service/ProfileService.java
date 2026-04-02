@@ -2,9 +2,11 @@ package com.fleet.modules.profile.service;
 
 import com.fleet.modules.auth.entity.AppUser;
 import com.fleet.modules.auth.repository.AppUserRepository;
+import com.fleet.modules.profile.dto.ChangePasswordRequest;
 import com.fleet.modules.profile.dto.ProfileDTO;
 import com.fleet.modules.profile.dto.UpdateProfileRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -12,9 +14,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class ProfileService {
 
     private final AppUserRepository appUserRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public ProfileService(AppUserRepository appUserRepository) {
+    public ProfileService(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder) {
         this.appUserRepository = appUserRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public ProfileDTO getProfile() {
@@ -28,6 +32,33 @@ public class ProfileService {
         user.setEmail(request.email());
         user.setAssignedRegion(request.assignedRegion());
         return toDto(appUserRepository.save(user));
+    }
+
+    public void changePassword(ChangePasswordRequest request) {
+        if (
+            request == null ||
+            isBlank(request.currentPassword()) ||
+            isBlank(request.newPassword()) ||
+            isBlank(request.confirmPassword())
+        ) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password fields are required.");
+        }
+
+        if (!request.newPassword().equals(request.confirmPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New passwords do not match.");
+        }
+
+        if (request.newPassword().length() < 8) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be at least 8 characters.");
+        }
+
+        AppUser user = getPrimaryUser();
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Current password is incorrect.");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        appUserRepository.save(user);
     }
 
     private AppUser getPrimaryUser() {
@@ -44,5 +75,9 @@ public class ProfileService {
             user.getEmail(),
             user.getAssignedRegion()
         );
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

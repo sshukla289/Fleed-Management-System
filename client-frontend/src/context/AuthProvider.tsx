@@ -1,6 +1,6 @@
 import { useMemo, useState, type PropsWithChildren } from 'react'
 import { login as loginRequest } from '../services/apiService'
-import type { AuthSession, LoginCredentials } from '../types'
+import type { AuthSession, LoginCredentials, UserProfile } from '../types'
 import { AUTH_STORAGE_KEY, AuthContext, type AuthContextValue } from './auth-context'
 
 function readStoredSession() {
@@ -35,12 +35,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
     window.localStorage.removeItem(AUTH_STORAGE_KEY)
   }
 
+  function updateSessionProfile(profile: UserProfile) {
+    setSession((current) => {
+      if (!current) {
+        return current
+      }
+
+      const nextSession = {
+        ...current,
+        profile,
+      }
+      window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextSession))
+      return nextSession
+    })
+  }
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
       isAuthenticated: Boolean(session),
       login,
       logout,
+      updateSessionProfile,
     }),
     [session],
   )

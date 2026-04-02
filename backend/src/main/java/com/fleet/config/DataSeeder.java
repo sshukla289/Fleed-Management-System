@@ -18,6 +18,7 @@ import java.util.List;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
 public class DataSeeder {
@@ -29,7 +30,8 @@ public class DataSeeder {
         MaintenanceAlertRepository maintenanceAlertRepository,
         RoutePlanRepository routePlanRepository,
         AppUserRepository appUserRepository,
-        TelemetryRepository telemetryRepository
+        TelemetryRepository telemetryRepository,
+        PasswordEncoder passwordEncoder
     ) {
         return args -> {
             if (vehicleRepository.count() == 0) {
@@ -75,9 +77,16 @@ public class DataSeeder {
                         "shreya.ops@fleetcontrol.dev",
                         "West and South India",
                         "manager@fleetcontrol.dev",
-                        "password123"
+                        passwordEncoder.encode("password123")
                     )
                 );
+            } else {
+                appUserRepository.findAll().forEach(user -> {
+                    if (user.getPassword() != null && !user.getPassword().startsWith("$2")) {
+                        user.setPassword(passwordEncoder.encode(user.getPassword()));
+                        appUserRepository.save(user);
+                    }
+                });
             }
 
             if (telemetryRepository.count() == 0) {

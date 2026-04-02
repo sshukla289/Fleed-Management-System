@@ -8,6 +8,7 @@ import com.fleet.modules.profile.dto.ProfileDTO;
 import com.fleet.modules.profile.service.ProfileService;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -16,10 +17,16 @@ public class AuthService {
 
     private final AppUserRepository appUserRepository;
     private final ProfileService profileService;
+    private final PasswordEncoder passwordEncoder;
 
-    public AuthService(AppUserRepository appUserRepository, ProfileService profileService) {
+    public AuthService(
+        AppUserRepository appUserRepository,
+        ProfileService profileService,
+        PasswordEncoder passwordEncoder
+    ) {
         this.appUserRepository = appUserRepository;
         this.profileService = profileService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -30,7 +37,7 @@ public class AuthService {
         AppUser user = appUserRepository.findByLoginEmailIgnoreCase(request.email())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials."));
 
-        if (!user.getPassword().equals(request.password())) {
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials.");
         }
 

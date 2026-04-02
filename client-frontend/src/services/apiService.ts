@@ -1,6 +1,7 @@
 import type {
   AssignShiftInput,
   AuthSession,
+  ChangePasswordInput,
   CreateMaintenanceAlertInput,
   CreateDriverInput,
   CreateRoutePlanInput,
@@ -454,5 +455,16 @@ export async function updateProfile(input: UpdateProfileInput): Promise<UserProf
       id: profile.id,
       ...input,
     },
+  )
+}
+
+export async function changePassword(input: ChangePasswordInput): Promise<void> {
+  return withFallback(
+    () =>
+      request<void>('/profile/change-password', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    undefined,
   )
 }
