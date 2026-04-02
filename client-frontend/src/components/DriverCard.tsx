@@ -1,0 +1,63 @@
+import type { Driver } from '../types'
+
+function driverStatusClass(status: Driver['status']) {
+  if (status === 'On Duty') {
+    return 'badge badge--online'
+  }
+
+  if (status === 'Resting') {
+    return 'badge badge--scheduled'
+  }
+
+  return 'badge'
+}
+
+interface DriverCardProps {
+  driver: Driver
+  highlighted?: boolean
+  onEdit?: (driver: Driver) => void
+  onDelete?: (driver: Driver) => void
+}
+
+export function DriverCard({ driver, highlighted = false, onEdit, onDelete }: DriverCardProps) {
+  function handleMessageDriver() {
+    const driverMailbox = `${driver.id.toLowerCase()}@fleetcontrol.dev`
+    window.location.href = `mailto:${driverMailbox}?subject=Fleet%20update%20for%20${encodeURIComponent(driver.name)}`
+  }
+
+  return (
+    <article className={`driver-card card${highlighted ? ' card--highlighted' : ''}`}>
+      <div className="driver-card__header">
+        <div>
+          <h3>{driver.name}</h3>
+          <p className="muted">{driver.id}</p>
+        </div>
+        <span className={driverStatusClass(driver.status)}>{driver.status}</span>
+      </div>
+      <div className="driver-card__meta">
+        <span className="badge">{driver.licenseType}</span>
+        <span className="badge">{driver.hoursDrivenToday}h today</span>
+      </div>
+      <div className="driver-card__footer">
+        <div className="muted">
+          Assigned vehicle {driver.assignedVehicleId ?? 'Unassigned'}
+        </div>
+        <div className="card-actions">
+          {onEdit ? (
+            <button className="secondary-button" onClick={() => onEdit(driver)} type="button">
+              Edit
+            </button>
+          ) : null}
+          {onDelete ? (
+            <button className="secondary-button danger-button" onClick={() => onDelete(driver)} type="button">
+              Delete
+            </button>
+          ) : null}
+          <button className="secondary-button" onClick={handleMessageDriver} type="button">
+            Message
+          </button>
+        </div>
+      </div>
+    </article>
+  )
+}
