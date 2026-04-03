@@ -32,6 +32,7 @@ export function MaintenanceAlerts() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(searchParams.get('openCreate') === '1')
   const [editingAlertId, setEditingAlertId] = useState<string | null>(null)
+  const [deletingAlertId, setDeletingAlertId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [form, setForm] = useState<CreateMaintenanceAlertInput>({
     vehicleId: searchParams.get('vehicleId') ?? '',
@@ -84,10 +85,8 @@ export function MaintenanceAlerts() {
   }
 
   async function handleDelete(alert: MaintenanceAlert) {
-    const shouldDelete = window.confirm(`Delete maintenance alert ${alert.id}?`)
-    if (!shouldDelete) {
-      return
-    }
+    setError('')
+    setDeletingAlertId(alert.id)
 
     try {
       await deleteMaintenanceAlert(alert.id)
@@ -97,6 +96,8 @@ export function MaintenanceAlerts() {
       }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete alert.')
+    } finally {
+      setDeletingAlertId((current) => (current === alert.id ? null : current))
     }
   }
 
@@ -221,11 +222,21 @@ export function MaintenanceAlerts() {
                 <span className="badge">{vehicle?.location ?? 'Location pending'}</span>
               </div>
               <div className="form-actions">
-                <button className="secondary-button" onClick={() => handleEdit(alert)} type="button">
+                <button
+                  className="secondary-button"
+                  disabled={deletingAlertId === alert.id}
+                  onClick={() => handleEdit(alert)}
+                  type="button"
+                >
                   Edit
                 </button>
-                <button className="secondary-button danger-button" onClick={() => handleDelete(alert)} type="button">
-                  Delete
+                <button
+                  className="secondary-button danger-button"
+                  disabled={deletingAlertId === alert.id}
+                  onClick={() => handleDelete(alert)}
+                  type="button"
+                >
+                  {deletingAlertId === alert.id ? 'Deleting...' : 'Delete'}
                 </button>
               </div>
             </article>

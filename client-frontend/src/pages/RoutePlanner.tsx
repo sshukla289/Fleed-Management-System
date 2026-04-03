@@ -38,6 +38,7 @@ export function RoutePlanner() {
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null)
+  const [deletingRouteId, setDeletingRouteId] = useState<string | null>(null)
   const [stopsInput, setStopsInput] = useState('')
   const [error, setError] = useState('')
   const [form, setForm] = useState<CreateRoutePlanInput>(initialForm)
@@ -121,10 +122,8 @@ export function RoutePlanner() {
   }
 
   async function handleDelete(route: RoutePlan) {
-    const shouldDelete = window.confirm(`Delete route ${route.name} (${route.id})?`)
-    if (!shouldDelete) {
-      return
-    }
+    setError('')
+    setDeletingRouteId(route.id)
 
     try {
       await deleteRoutePlan(route.id)
@@ -140,6 +139,8 @@ export function RoutePlanner() {
       }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete route.')
+    } finally {
+      setDeletingRouteId((current) => (current === route.id ? null : current))
     }
   }
 
@@ -275,14 +276,29 @@ export function RoutePlanner() {
               ))}
             </div>
             <div className="form-actions">
-              <button className="secondary-button" onClick={() => setSelectedRouteId(route.id)} type="button">
+              <button
+                className="secondary-button"
+                disabled={deletingRouteId === route.id}
+                onClick={() => setSelectedRouteId(route.id)}
+                type="button"
+              >
                 View on map
               </button>
-              <button className="secondary-button" onClick={() => handleEdit(route)} type="button">
+              <button
+                className="secondary-button"
+                disabled={deletingRouteId === route.id}
+                onClick={() => handleEdit(route)}
+                type="button"
+              >
                 Edit
               </button>
-              <button className="secondary-button danger-button" onClick={() => handleDelete(route)} type="button">
-                Delete
+              <button
+                className="secondary-button danger-button"
+                disabled={deletingRouteId === route.id}
+                onClick={() => handleDelete(route)}
+                type="button"
+              >
+                {deletingRouteId === route.id ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </article>

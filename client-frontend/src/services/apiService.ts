@@ -104,7 +104,7 @@ let drivers: Driver[] = [
   },
 ]
 
-const maintenanceAlerts: MaintenanceAlert[] = [
+let maintenanceAlerts: MaintenanceAlert[] = [
   {
     id: 'MA-1',
     vehicleId: 'VH-103',
@@ -131,7 +131,7 @@ const maintenanceAlerts: MaintenanceAlert[] = [
   },
 ]
 
-const routePlans: RoutePlan[] = [
+let routePlans: RoutePlan[] = [
   {
     id: 'RT-501',
     name: 'Western Corridor Morning Run',
@@ -225,6 +225,35 @@ function nextDriverId() {
   return `DR-${maxDriverNumber + 1}`
 }
 
+function cloneMaintenanceAlert(alert: MaintenanceAlert): MaintenanceAlert {
+  return { ...alert }
+}
+
+function nextMaintenanceAlertId() {
+  const maxAlertNumber = maintenanceAlerts.reduce((max, alert) => {
+    const alertNumber = Number(alert.id.replace('MA-', ''))
+    return Number.isFinite(alertNumber) ? Math.max(max, alertNumber) : max
+  }, 0)
+
+  return `MA-${maxAlertNumber + 1}`
+}
+
+function cloneRoutePlan(route: RoutePlan): RoutePlan {
+  return {
+    ...route,
+    stops: [...route.stops],
+  }
+}
+
+function nextRoutePlanId() {
+  const maxRouteNumber = routePlans.reduce((max, route) => {
+    const routeNumber = Number(route.id.replace('RT-', ''))
+    return Number.isFinite(routeNumber) ? Math.max(max, routeNumber) : max
+  }, 500)
+
+  return `RT-${maxRouteNumber + 1}`
+}
+
 const fallbackSession: AuthSession = {
   token: 'local-demo-session',
   profile,
@@ -284,11 +313,17 @@ export function fetchDrivers(): Promise<Driver[]> {
 }
 
 export function fetchMaintenanceAlerts(): Promise<MaintenanceAlert[]> {
-  return withFallback(() => request<MaintenanceAlert[]>('/maintenance-alerts'), maintenanceAlerts)
+  return withFallback(
+    () => request<MaintenanceAlert[]>('/maintenance-alerts'),
+    maintenanceAlerts.map(cloneMaintenanceAlert),
+  )
 }
 
 export function fetchRoutePlans(): Promise<RoutePlan[]> {
-  return withFallback(() => request<RoutePlan[]>('/routes'), routePlans)
+  return withFallback(
+    () => request<RoutePlan[]>('/routes'),
+    routePlans.map(cloneRoutePlan),
+  )
 }
 
 export function fetchProfile(): Promise<UserProfile> {
@@ -361,44 +396,51 @@ export async function createDriver(input: CreateDriverInput): Promise<Driver> {
 export async function createMaintenanceAlert(
   input: CreateMaintenanceAlertInput,
 ): Promise<MaintenanceAlert> {
-  return withFallback(
-    () =>
-      request<MaintenanceAlert>('/maintenance-alerts', {
-        method: 'POST',
-        body: JSON.stringify(input),
-      }),
-    {
-      id: `MA-${maintenanceAlerts.length + 1}`,
+  try {
+    return await request<MaintenanceAlert>('/maintenance-alerts', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  } catch (error) {
+    console.warn('Falling back to mock API data:', error)
+    const createdAlert = {
+      id: nextMaintenanceAlertId(),
       ...input,
-    },
-  )
+    }
+    maintenanceAlerts = [...maintenanceAlerts, createdAlert]
+    return cloneMaintenanceAlert(createdAlert)
+  }
 }
 
 export async function updateMaintenanceAlert(
   id: string,
   input: UpdateMaintenanceAlertInput,
 ): Promise<MaintenanceAlert> {
-  return withFallback(
-    () =>
-      request<MaintenanceAlert>(`/maintenance-alerts/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(input),
-      }),
-    {
+  try {
+    return await request<MaintenanceAlert>(`/maintenance-alerts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+  } catch (error) {
+    console.warn('Falling back to mock API data:', error)
+    const updatedAlert = {
       id,
       ...input,
-    },
-  )
+    }
+    maintenanceAlerts = maintenanceAlerts.map((alert) => (alert.id === id ? updatedAlert : alert))
+    return cloneMaintenanceAlert(updatedAlert)
+  }
 }
 
 export async function deleteMaintenanceAlert(id: string): Promise<void> {
-  return withFallback(
-    () =>
-      request<void>(`/maintenance-alerts/${id}`, {
-        method: 'DELETE',
-      }),
-    undefined,
-  )
+  try {
+    await request<void>(`/maintenance-alerts/${id}`, {
+      method: 'DELETE',
+    })
+  } catch (error) {
+    console.warn('Falling back to mock API data:', error)
+    maintenanceAlerts = maintenanceAlerts.filter((alert) => alert.id !== id)
+  }
 }
 
 export async function assignShift(input: AssignShiftInput): Promise<Driver> {
@@ -454,46 +496,53 @@ export async function optimizeRoutes(): Promise<RoutePlan[]> {
       request<RoutePlan[]>('/routes/optimize', {
         method: 'POST',
       }),
-    [...routePlans].sort((left, right) => left.distanceKm - right.distanceKm),
+    [...routePlans].sort((left, right) => left.distanceKm - right.distanceKm).map(cloneRoutePlan),
   )
 }
 
 export async function createRoutePlan(input: CreateRoutePlanInput): Promise<RoutePlan> {
-  return withFallback(
-    () =>
-      request<RoutePlan>('/routes', {
-        method: 'POST',
-        body: JSON.stringify(input),
-      }),
-    {
-      id: `RT-${500 + routePlans.length + 1}`,
+  try {
+    return await request<RoutePlan>('/routes', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  } catch (error) {
+    console.warn('Falling back to mock API data:', error)
+    const createdRoute = {
+      id: nextRoutePlanId(),
       ...input,
-    },
-  )
+    }
+    routePlans = [...routePlans, createdRoute]
+    return cloneRoutePlan(createdRoute)
+  }
 }
 
 export async function updateRoutePlan(id: string, input: UpdateRoutePlanInput): Promise<RoutePlan> {
-  return withFallback(
-    () =>
-      request<RoutePlan>(`/routes/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(input),
-      }),
-    {
+  try {
+    return await request<RoutePlan>(`/routes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+  } catch (error) {
+    console.warn('Falling back to mock API data:', error)
+    const updatedRoute = {
       id,
       ...input,
-    },
-  )
+    }
+    routePlans = routePlans.map((route) => (route.id === id ? updatedRoute : route))
+    return cloneRoutePlan(updatedRoute)
+  }
 }
 
 export async function deleteRoutePlan(id: string): Promise<void> {
-  return withFallback(
-    () =>
-      request<void>(`/routes/${id}`, {
-        method: 'DELETE',
-      }),
-    undefined,
-  )
+  try {
+    await request<void>(`/routes/${id}`, {
+      method: 'DELETE',
+    })
+  } catch (error) {
+    console.warn('Falling back to mock API data:', error)
+    routePlans = routePlans.filter((route) => route.id !== id)
+  }
 }
 
 export async function updateProfile(input: UpdateProfileInput): Promise<UserProfile> {
