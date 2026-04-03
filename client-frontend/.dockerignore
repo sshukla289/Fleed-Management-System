@@ -1,0 +1,6 @@
+node_modules
+dist
+coverage
+frontend-dev.log
+frontend-dev.err
+.git

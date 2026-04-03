@@ -17,9 +17,16 @@ interface DriverCardProps {
   highlighted?: boolean
   onEdit?: (driver: Driver) => void
   onDelete?: (driver: Driver) => void
+  isDeleting?: boolean
 }
 
-export function DriverCard({ driver, highlighted = false, onEdit, onDelete }: DriverCardProps) {
+export function DriverCard({
+  driver,
+  highlighted = false,
+  onEdit,
+  onDelete,
+  isDeleting = false,
+}: DriverCardProps) {
   function handleMessageDriver() {
     const driverMailbox = `${driver.id.toLowerCase()}@fleetcontrol.dev`
     window.location.href = `mailto:${driverMailbox}?subject=Fleet%20update%20for%20${encodeURIComponent(driver.name)}`
@@ -44,16 +51,21 @@ export function DriverCard({ driver, highlighted = false, onEdit, onDelete }: Dr
         </div>
         <div className="card-actions">
           {onEdit ? (
-            <button className="secondary-button" onClick={() => onEdit(driver)} type="button">
+            <button className="secondary-button" disabled={isDeleting} onClick={() => onEdit(driver)} type="button">
               Edit
             </button>
           ) : null}
           {onDelete ? (
-            <button className="secondary-button danger-button" onClick={() => onDelete(driver)} type="button">
-              Delete
+            <button
+              className="secondary-button danger-button"
+              disabled={isDeleting}
+              onClick={() => onDelete(driver)}
+              type="button"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </button>
           ) : null}
-          <button className="secondary-button" onClick={handleMessageDriver} type="button">
+          <button className="secondary-button" disabled={isDeleting} onClick={handleMessageDriver} type="button">
             Message
           </button>
         </div>

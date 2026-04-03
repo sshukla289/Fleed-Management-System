@@ -710,6 +710,11 @@ input {
   color: var(--color-primary-strong);
 }
 
+.secondary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .danger-button {
   background: rgba(214, 40, 57, 0.12);
   color: #9f1c2b;

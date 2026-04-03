@@ -27,6 +27,7 @@ export function DriverList() {
   const [showShiftForm, setShowShiftForm] = useState(false)
   const [showDriverForm, setShowDriverForm] = useState(false)
   const [editingDriverId, setEditingDriverId] = useState<string | null>(null)
+  const [deletingDriverId, setDeletingDriverId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [assignment, setAssignment] = useState<AssignShiftInput>({
     driverId: '',
@@ -86,10 +87,8 @@ export function DriverList() {
   }
 
   async function handleDelete(driver: Driver) {
-    const shouldDelete = window.confirm(`Delete driver ${driver.name} (${driver.id})?`)
-    if (!shouldDelete) {
-      return
-    }
+    setError('')
+    setDeletingDriverId(driver.id)
 
     try {
       await deleteDriver(driver.id)
@@ -99,6 +98,8 @@ export function DriverList() {
       }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete driver.')
+    } finally {
+      setDeletingDriverId((current) => (current === driver.id ? null : current))
     }
   }
 
@@ -257,6 +258,7 @@ export function DriverList() {
             key={driver.id}
             driver={driver}
             highlighted={driver.id === highlightedDriverId}
+            isDeleting={deletingDriverId === driver.id}
             onDelete={handleDelete}
             onEdit={handleEdit}
           />

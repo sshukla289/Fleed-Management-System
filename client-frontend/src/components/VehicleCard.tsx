@@ -18,9 +18,10 @@ interface VehicleCardProps {
   vehicle: Vehicle
   onEdit?: (vehicle: Vehicle) => void
   onDelete?: (vehicle: Vehicle) => void
+  isDeleting?: boolean
 }
 
-export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
+export function VehicleCard({ vehicle, onEdit, onDelete, isDeleting = false }: VehicleCardProps) {
   return (
     <article className="vehicle-card card">
       <div className="vehicle-card__header">
@@ -41,13 +42,18 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
         <div className="muted">Assigned driver {vehicle.driverId}</div>
         <div className="card-actions">
           {onEdit ? (
-            <button className="secondary-button" onClick={() => onEdit(vehicle)} type="button">
+            <button className="secondary-button" disabled={isDeleting} onClick={() => onEdit(vehicle)} type="button">
               Edit
             </button>
           ) : null}
           {onDelete ? (
-            <button className="secondary-button danger-button" onClick={() => onDelete(vehicle)} type="button">
-              Delete
+            <button
+              className="secondary-button danger-button"
+              disabled={isDeleting}
+              onClick={() => onDelete(vehicle)}
+              type="button"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </button>
           ) : null}
           <Link className="link-button" to={`/vehicles/${vehicle.id}`}>

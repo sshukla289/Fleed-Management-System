@@ -20,6 +20,7 @@ export function VehicleList() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null)
+  const [deletingVehicleId, setDeletingVehicleId] = useState<string | null>(null)
   const [form, setForm] = useState<CreateVehicleInput>(initialForm)
   const [error, setError] = useState('')
   const query = searchParams.get('q')?.trim().toLowerCase() ?? ''
@@ -50,10 +51,8 @@ export function VehicleList() {
   }
 
   async function handleDelete(vehicle: Vehicle) {
-    const shouldDelete = window.confirm(`Delete vehicle ${vehicle.name} (${vehicle.id})?`)
-    if (!shouldDelete) {
-      return
-    }
+    setError('')
+    setDeletingVehicleId(vehicle.id)
 
     try {
       await deleteVehicle(vehicle.id)
@@ -63,6 +62,8 @@ export function VehicleList() {
       }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete vehicle.')
+    } finally {
+      setDeletingVehicleId((current) => (current === vehicle.id ? null : current))
     }
   }
 
@@ -182,6 +183,7 @@ export function VehicleList() {
       <section className="list-grid">
         {filteredVehicles.map((vehicle) => (
           <VehicleCard
+            isDeleting={deletingVehicleId === vehicle.id}
             key={vehicle.id}
             onDelete={handleDelete}
             onEdit={handleEdit}

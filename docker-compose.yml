@@ -3,34 +3,82 @@ services:
     image: mysql:8.4
     container_name: fleet-mysql
     environment:
-      MYSQL_DATABASE: fleet_db
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fleet_db}
+      MYSQL_USER: ${MYSQL_USER:-fleet_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-fleet_app_dev_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-fleet_root_dev_password}
+    command: ["mysqld", "--skip-name-resolve"]
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-fleet_root_dev_password}"]
       interval: 10s
       timeout: 5s
       retries: 10
+    security_opt:
+      - no-new-privileges:true
 
   backend:
     build:
       context: ./backend
+      target: dev
     container_name: fleet-backend
     depends_on:
       mysql:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/fleet_db
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-fleet_db}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-fleet_app}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-fleet_app_dev_password}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
+      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-true}
       SERVER_PORT: 8080
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./backend/src:/workspace/src:ro
+      - backend_target:/workspace/target
+      - backend_m2:/home/spring/.m2
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  frontend:
+    build:
+      context: ./client-frontend
+      target: dev
+    container_name: fleet-frontend
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./client-frontend/src:/workspace/src:ro
+      - ./client-frontend/public:/workspace/public:ro
+      - ./client-frontend/index.html:/workspace/index.html:ro
+      - ./client-frontend/vite.config.ts:/workspace/vite.config.ts:ro
+      - ./client-frontend/tsconfig.json:/workspace/tsconfig.json:ro
+      - ./client-frontend/tsconfig.app.json:/workspace/tsconfig.app.json:ro
+      - ./client-frontend/tsconfig.node.json:/workspace/tsconfig.node.json:ro
+      - frontend_node_modules:/workspace/node_modules
+      - frontend_npm_cache:/home/node/.npm
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   mysql_data:
+  backend_m2:
+  backend_target:
+  frontend_node_modules:
+  frontend_npm_cache:
