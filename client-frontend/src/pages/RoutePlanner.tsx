@@ -99,6 +99,7 @@ export function RoutePlanner() {
   const [distanceInput, setDistanceInput] = useState('0')
   const [stopsInput, setStopsInput] = useState('')
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [form, setForm] = useState<CreateRoutePlanInput>(initialForm)
 
   useEffect(() => {
@@ -135,14 +136,23 @@ export function RoutePlanner() {
   async function handleOptimizeRoutes() {
     setIsOptimizing(true)
     setError('')
+    setSuccessMessage('')
 
     try {
       const nextRoutes = await optimizeRoutes()
       setRoutes(nextRoutes)
 
-      if (!selectedRouteId && nextRoutes[0]) {
-        setSelectedRouteId(nextRoutes[0].id)
+      if (nextRoutes[0]) {
+        setSelectedRouteId((current) =>
+          current && nextRoutes.some((route) => route.id === current) ? current : nextRoutes[0].id,
+        )
       }
+
+      setSuccessMessage(
+        nextRoutes.length === 1
+          ? 'Route optimization applied. Distance, ETA, and stop order were refreshed.'
+          : `Route optimization applied to ${nextRoutes.length} plans. Distance, ETA, and stop order were refreshed.`,
+      )
     } catch (optimizeError) {
       setError(optimizeError instanceof Error ? optimizeError.message : 'Unable to optimize routes.')
     } finally {
@@ -153,6 +163,7 @@ export function RoutePlanner() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    setSuccessMessage('')
 
     const parsedDistance = Number(distanceInput)
     if (!distanceInput.trim() || Number.isNaN(parsedDistance) || parsedDistance < 0) {
@@ -188,6 +199,7 @@ export function RoutePlanner() {
 
   async function handleDelete(route: RoutePlan) {
     setError('')
+    setSuccessMessage('')
     setDeletingRouteId(route.id)
 
     try {
@@ -223,6 +235,7 @@ export function RoutePlanner() {
     setShowForm(true)
     setSelectedRouteId(route.id)
     setError('')
+    setSuccessMessage('')
   }
 
   function resetForm() {
@@ -254,6 +267,7 @@ export function RoutePlanner() {
             } else {
               setShowForm(true)
               setError('')
+              setSuccessMessage('')
             }
           }}
           type="button"
@@ -322,6 +336,7 @@ export function RoutePlanner() {
 
       {primaryRoute ? <MapView title={primaryRoute.name} stops={primaryRoute.stops} /> : null}
 
+      {successMessage ? <div className="form-success">{successMessage}</div> : null}
       {error && !showForm ? <div className="form-error">{error}</div> : null}
 
       <section className="route-list">

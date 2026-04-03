@@ -5,6 +5,7 @@ import com.fleet.modules.route.dto.RoutePlanDTO;
 import com.fleet.modules.route.dto.UpdateRoutePlanRequest;
 import com.fleet.modules.route.entity.RoutePlan;
 import com.fleet.modules.route.repository.RoutePlanRepository;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -48,12 +49,18 @@ public class RoutePlanService {
     }
 
     public List<RoutePlanDTO> optimizeRoutes() {
-        return routePlanRepository.findAll().stream()
+        List<RoutePlan> optimizedRoutes = routePlanRepository.findAll().stream()
+            .map(this::applyOptimization)
+            .toList();
+
+        routePlanRepository.saveAll(optimizedRoutes);
+
+        return optimizedRoutes.stream()
             .map(this::toDto)
             .sorted(
-            Comparator
-                .comparingInt((RoutePlanDTO route) -> statusPriority(route.status()))
-                .thenComparingInt(RoutePlanDTO::distanceKm)
+                Comparator
+                    .comparingInt((RoutePlanDTO route) -> statusPriority(route.status()))
+                    .thenComparingInt(RoutePlanDTO::distanceKm)
             )
             .toList();
     }
@@ -92,6 +99,117 @@ public class RoutePlanService {
             case "Scheduled" -> 1;
             default -> 2;
         };
+    }
+
+    private RoutePlan applyOptimization(RoutePlan routePlan) {
+        List<String> optimizedStops = optimizeStops(routePlan.getStops());
+        int optimizedDistance = optimizeDistance(routePlan.getDistanceKm(), optimizedStops.size());
+        String optimizedDuration = optimizeDuration(
+            routePlan.getEstimatedDuration(),
+            routePlan.getDistanceKm(),
+            optimizedDistance,
+            optimizedStops.size()
+        );
+
+        routePlan.setStops(optimizedStops);
+        routePlan.setDistanceKm(optimizedDistance);
+        routePlan.setEstimatedDuration(optimizedDuration);
+        return routePlan;
+    }
+
+    private List<String> optimizeStops(List<String> stops) {
+        if (stops == null || stops.size() <= 2) {
+            return stops == null ? List.of() : new ArrayList<>(stops);
+        }
+
+        String start = stops.get(0);
+        String end = stops.get(stops.size() - 1);
+        List<String> middleStops = new ArrayList<>(stops.subList(1, stops.size() - 1));
+        middleStops.sort(String::compareToIgnoreCase);
+
+        List<String> optimizedStops = new ArrayList<>();
+        optimizedStops.add(start);
+        optimizedStops.addAll(middleStops);
+        optimizedStops.add(end);
+        return optimizedStops;
+    }
+
+    private int optimizeDistance(int distanceKm, int stopCount) {
+        if (distanceKm <= 0) {
+            return distanceKm;
+        }
+
+        double reductionFactor = Math.min(0.04 + Math.max(stopCount - 2, 0) * 0.02, 0.18);
+        int optimizedDistance = (int) Math.round(distanceKm * (1 - reductionFactor));
+        return Math.max(1, Math.min(distanceKm, optimizedDistance));
+    }
+
+    private String optimizeDuration(
+        String estimatedDuration,
+        int currentDistance,
+        int optimizedDistance,
+        int stopCount
+    ) {
+        int currentMinutes = parseDurationMinutes(estimatedDuration);
+        if (currentMinutes <= 0) {
+            return estimatedDuration;
+        }
+
+        double distanceRatio = currentDistance > 0 ? (double) optimizedDistance / currentDistance : 1;
+        int optimizedMinutes = (int) Math.round(currentMinutes * distanceRatio);
+
+        if (stopCount > 2) {
+            optimizedMinutes = Math.max(20, optimizedMinutes - Math.min((stopCount - 2) * 4, 18));
+        }
+
+        return formatDurationMinutes(optimizedMinutes);
+    }
+
+    private int parseDurationMinutes(String estimatedDuration) {
+        if (estimatedDuration == null || estimatedDuration.trim().isEmpty()) {
+            return 0;
+        }
+
+        String normalized = estimatedDuration.trim().toLowerCase();
+        int hours = 0;
+        int minutes = 0;
+
+        int hourMarker = normalized.indexOf('h');
+        if (hourMarker >= 0) {
+            hours = parseDurationSegment(normalized.substring(0, hourMarker).trim());
+        }
+
+        int minuteMarker = normalized.indexOf('m');
+        if (minuteMarker >= 0) {
+            int minuteStart = hourMarker >= 0 ? hourMarker + 1 : 0;
+            minutes = parseDurationSegment(normalized.substring(minuteStart, minuteMarker).trim());
+        }
+
+        return hours * 60 + minutes;
+    }
+
+    private int parseDurationSegment(String value) {
+        if (value == null || value.isEmpty()) {
+            return 0;
+        }
+
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException exception) {
+            return 0;
+        }
+    }
+
+    private String formatDurationMinutes(int totalMinutes) {
+        int safeMinutes = Math.max(0, totalMinutes);
+        int hours = safeMinutes / 60;
+        int minutes = safeMinutes % 60;
+
+        if (hours == 0) {
+            return minutes + "m";
+        }
+
+        return hours + "h " + minutes + "m";
     }
 
     private RoutePlanDTO toDto(RoutePlan routePlan) {

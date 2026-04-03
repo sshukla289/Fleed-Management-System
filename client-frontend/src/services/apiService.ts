@@ -245,6 +245,107 @@ function cloneRoutePlan(route: RoutePlan): RoutePlan {
   }
 }
 
+function statusPriority(status: RoutePlan['status']) {
+  switch (status) {
+    case 'In Progress':
+      return 0
+    case 'Scheduled':
+      return 1
+    default:
+      return 2
+  }
+}
+
+function optimizeRouteStops(stops: string[]) {
+  if (stops.length <= 2) {
+    return [...stops]
+  }
+
+  const start = stops[0]
+  const end = stops[stops.length - 1]
+  const middleStops = stops.slice(1, -1).sort((left, right) => left.localeCompare(right))
+
+  return [start, ...middleStops, end]
+}
+
+function optimizeRouteDistance(distanceKm: number, stopCount: number) {
+  if (distanceKm <= 0) {
+    return distanceKm
+  }
+
+  const reductionFactor = Math.min(0.04 + Math.max(stopCount - 2, 0) * 0.02, 0.18)
+  const optimizedDistance = Math.round(distanceKm * (1 - reductionFactor))
+  return Math.max(1, Math.min(distanceKm, optimizedDistance))
+}
+
+function parseRouteDurationMinutes(estimatedDuration: string) {
+  const normalized = estimatedDuration.trim().toLowerCase()
+  if (!normalized) {
+    return 0
+  }
+
+  const hourMarker = normalized.indexOf('h')
+  const minuteMarker = normalized.indexOf('m')
+  const hours =
+    hourMarker >= 0 ? Number.parseInt(normalized.slice(0, hourMarker).trim(), 10) || 0 : 0
+  const minutes =
+    minuteMarker >= 0
+      ? Number.parseInt(normalized.slice(hourMarker >= 0 ? hourMarker + 1 : 0, minuteMarker).trim(), 10) || 0
+      : 0
+
+  return hours * 60 + minutes
+}
+
+function formatRouteDurationMinutes(totalMinutes: number) {
+  const safeMinutes = Math.max(0, totalMinutes)
+  const hours = Math.floor(safeMinutes / 60)
+  const minutes = safeMinutes % 60
+
+  if (hours === 0) {
+    return `${minutes}m`
+  }
+
+  return `${hours}h ${minutes}m`
+}
+
+function optimizeRouteDuration(
+  estimatedDuration: string,
+  currentDistance: number,
+  optimizedDistance: number,
+  stopCount: number,
+) {
+  const currentMinutes = parseRouteDurationMinutes(estimatedDuration)
+  if (currentMinutes <= 0) {
+    return estimatedDuration
+  }
+
+  const distanceRatio = currentDistance > 0 ? optimizedDistance / currentDistance : 1
+  let optimizedMinutes = Math.round(currentMinutes * distanceRatio)
+
+  if (stopCount > 2) {
+    optimizedMinutes = Math.max(20, optimizedMinutes - Math.min((stopCount - 2) * 4, 18))
+  }
+
+  return formatRouteDurationMinutes(optimizedMinutes)
+}
+
+function optimizeRoutePlanData(route: RoutePlan): RoutePlan {
+  const optimizedStops = optimizeRouteStops(route.stops)
+  const optimizedDistance = optimizeRouteDistance(route.distanceKm, optimizedStops.length)
+
+  return {
+    ...route,
+    distanceKm: optimizedDistance,
+    estimatedDuration: optimizeRouteDuration(
+      route.estimatedDuration,
+      route.distanceKm,
+      optimizedDistance,
+      optimizedStops.length,
+    ),
+    stops: optimizedStops,
+  }
+}
+
 function nextRoutePlanId() {
   const maxRouteNumber = routePlans.reduce((max, route) => {
     const routeNumber = Number(route.id.replace('RT-', ''))
@@ -496,7 +597,17 @@ export async function optimizeRoutes(): Promise<RoutePlan[]> {
       request<RoutePlan[]>('/routes/optimize', {
         method: 'POST',
       }),
-    [...routePlans].sort((left, right) => left.distanceKm - right.distanceKm).map(cloneRoutePlan),
+    (() => {
+      routePlans = routePlans
+        .map(optimizeRoutePlanData)
+        .sort(
+          (left, right) =>
+            statusPriority(left.status) - statusPriority(right.status) ||
+            left.distanceKm - right.distanceKm,
+        )
+
+      return routePlans.map(cloneRoutePlan)
+    })(),
   )
 }
 

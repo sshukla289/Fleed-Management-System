@@ -122,4 +122,43 @@ describe('RoutePlanner', () => {
     fireEvent.change(distanceInput, { target: { value: '09.999' } })
     expect(distanceInput).toHaveDisplayValue('09.99')
   })
+
+  it('applies route optimization results to the planner', async () => {
+    optimizeRoutesMock.mockResolvedValue([
+      {
+        id: 'RT-501',
+        name: 'Western Corridor Morning Run',
+        status: 'In Progress',
+        distanceKm: 315,
+        estimatedDuration: '5h 41m',
+        stops: ['Mumbai Hub', 'Lonavala', 'Pune Depot', 'Satara Crossdock'],
+      },
+      {
+        id: 'RT-503',
+        name: 'Southern Last-Mile Sweep',
+        status: 'Completed',
+        distanceKm: 88,
+        estimatedDuration: '1h 45m',
+        stops: ['Bengaluru Center', 'Indiranagar', 'Whitefield'],
+      },
+    ])
+
+    render(
+      <MemoryRouter
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+        initialEntries={['/routes']}
+      >
+        <RoutePlanner />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /optimize route/i }))
+
+    expect(optimizeRoutesMock).toHaveBeenCalled()
+    expect(
+      await screen.findByText(/route optimization applied to 2 plans/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText('315 km')).toBeInTheDocument()
+    expect(screen.getByText('5h 41m')).toBeInTheDocument()
+  })
 })
