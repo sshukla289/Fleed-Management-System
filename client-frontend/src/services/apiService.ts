@@ -150,7 +150,7 @@ let maintenanceAlerts: MaintenanceAlert[] = [
   },
 ]
 
-let alerts: Alert[] = [
+const alerts: Alert[] = [
   {
     id: 'AL-1',
     category: 'MAINTENANCE',
@@ -207,7 +207,7 @@ let alerts: Alert[] = [
   },
 ]
 
-let notifications: Notification[] = [
+const notifications: Notification[] = [
   {
     id: 'NT-1',
     category: 'CRITICAL_ALERT',

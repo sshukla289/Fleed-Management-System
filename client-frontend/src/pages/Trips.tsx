@@ -188,7 +188,7 @@ export function Trips() {
   useEffect(() => {
     void loadTelemetry(selectedTrip?.tripId ?? null)
     setCompletionForm(buildCompletionForm(selectedTrip))
-  }, [selectedTrip?.tripId])
+  }, [selectedTrip])
 
   async function refreshBoard(nextSelectedTripId?: string | null) {
     const keepSelected = nextSelectedTripId ?? selectedTrip?.tripId ?? null

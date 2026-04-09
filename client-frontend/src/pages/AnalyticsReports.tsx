@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { fetchDriverAnalytics, fetchTripAnalytics, fetchVehicleAnalytics } from '../services/apiService'
 import type { DriverAnalytics, TripAnalytics, TripStatus, VehicleAnalytics } from '../types'
@@ -44,21 +44,21 @@ export function AnalyticsReports() {
   const [working, setWorking] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
-  async function loadReports() {
+  const loadReports = useCallback(async (filters: { startDate: string; endDate: string; statusFilter: 'ALL' | TripStatus }) => {
     setLoading(true)
     setMessage(null)
 
     try {
-      const filters = {
-        startDate,
-        endDate,
-        status: statusFilter === 'ALL' ? undefined : statusFilter,
+      const requestFilters = {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        status: filters.statusFilter === 'ALL' ? undefined : filters.statusFilter,
       }
 
       const [tripData, vehicleData, driverData] = await Promise.all([
-        fetchTripAnalytics(filters),
-        fetchVehicleAnalytics(filters),
-        fetchDriverAnalytics(filters),
+        fetchTripAnalytics(requestFilters),
+        fetchVehicleAnalytics(requestFilters),
+        fetchDriverAnalytics(requestFilters),
       ])
 
       setTripAnalytics(tripData)
@@ -70,11 +70,11 @@ export function AnalyticsReports() {
       setLoading(false)
       setWorking(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    void loadReports()
-  }, [])
+    void loadReports({ startDate: defaultStart, endDate: defaultEnd, statusFilter: 'ALL' })
+  }, [loadReports])
 
   const selectedRange = useMemo(
     () => `${formatDateTime(startDate)} - ${formatDateTime(endDate)}`,
@@ -84,7 +84,7 @@ export function AnalyticsReports() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setWorking(true)
-    await loadReports()
+    await loadReports({ startDate, endDate, statusFilter })
   }
 
   return (
@@ -97,7 +97,7 @@ export function AnalyticsReports() {
         actionDisabled={loading || working}
         onAction={() => {
           setWorking(true)
-          void loadReports()
+          void loadReports({ startDate, endDate, statusFilter })
         }}
       />
 
