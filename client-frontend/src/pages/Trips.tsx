@@ -7,6 +7,7 @@ import {
   createTrip,
   dispatchTrip,
   fetchDrivers,
+  fetchComplianceCheck,
   fetchRoutePlans,
   fetchTripTelemetry,
   fetchTrips,
@@ -19,6 +20,7 @@ import type {
   CompleteTripInput,
   CreateTripInput,
   Driver,
+  ComplianceCheckResult,
   RoutePlan,
   Trip,
   TripPriority,
@@ -102,6 +104,7 @@ export function Trips() {
   const [routes, setRoutes] = useState<RoutePlan[]>([])
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [telemetry, setTelemetry] = useState<TripTelemetryPoint[]>([])
+  const [complianceCheck, setComplianceCheck] = useState<ComplianceCheckResult | null>(null)
   const [plannerForm, setPlannerForm] = useState<CreateTripInput>(initialPlannerForm)
   const [completionForm, setCompletionForm] = useState<CompleteTripInput>(initialCompletionForm)
   const [loading, setLoading] = useState(true)
@@ -160,13 +163,21 @@ export function Trips() {
   async function loadTelemetry(tripId?: string | null) {
     if (!tripId) {
       setTelemetry([])
+      setComplianceCheck(null)
       return
     }
 
     try {
-      setTelemetry(await fetchTripTelemetry(tripId))
+      const [telemetryResult, complianceResult] = await Promise.allSettled([
+        fetchTripTelemetry(tripId),
+        fetchComplianceCheck(tripId),
+      ])
+
+      setTelemetry(telemetryResult.status === 'fulfilled' ? telemetryResult.value : [])
+      setComplianceCheck(complianceResult.status === 'fulfilled' ? complianceResult.value : null)
     } catch {
       setTelemetry([])
+      setComplianceCheck(null)
     }
   }
 
@@ -520,6 +531,20 @@ export function Trips() {
               </article>
             </div>
 
+            <div className="trip-compliance-banner">
+              <div>
+                <span>Compliance readiness</span>
+                <strong>{complianceCheck?.complianceStatus ?? selectedTrip.complianceStatus}</strong>
+                <p>
+                  {complianceCheck?.recommendedAction ?? 'Select a trip to review compliance checks.'}
+                </p>
+              </div>
+              <div className="trip-compliance-banner__meta">
+                <span className={statusClass(selectedTrip.status)}>{selectedTrip.status}</span>
+                <span className="badge">{complianceCheck?.blockingReasons.length ?? 0} blockers</span>
+              </div>
+            </div>
+
             <div className="trip-detail__actions">
               <button className="secondary-button" disabled={working} onClick={() => void handleTripAction(() => validateTrip(selectedTrip.tripId), 'Trip validated.') } type="button">
                 Validate
@@ -592,6 +617,57 @@ export function Trips() {
             </form>
           </section>
         </div>
+      ) : null}
+
+      {complianceCheck ? (
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <h3>Readiness checks</h3>
+              <p className="muted">Vehicle, driver, maintenance, and route constraints for the selected trip.</p>
+            </div>
+            <span className="badge">{complianceCheck.compliant ? 'Cleared' : 'Blocked'}</span>
+          </div>
+
+          <div className="trip-compliance-grid">
+            <article className="trip-compliance-card">
+              <span>Blocking reasons</span>
+              {complianceCheck.blockingReasons.length ? (
+                <ul>
+                  {complianceCheck.blockingReasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">No blocking constraints detected.</p>
+              )}
+            </article>
+            <article className="trip-compliance-card">
+              <span>Warnings</span>
+              {complianceCheck.warnings.length ? (
+                <ul>
+                  {complianceCheck.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">No warnings returned for this trip.</p>
+              )}
+            </article>
+            <article className="trip-compliance-card trip-compliance-card--wide">
+              <span>Machine-readable checks</span>
+              <div className="trip-compliance-checks">
+                {complianceCheck.checks.map((check) => (
+                  <div key={check.code} className={`trip-compliance-check${check.blocking ? ' trip-compliance-check--blocking' : ''}`}>
+                    <strong>{check.label}</strong>
+                    <span>{check.message}</span>
+                    <small>{check.passed ? 'Passed' : 'Failed'}</small>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+        </section>
       ) : null}
 
       <section className="panel">

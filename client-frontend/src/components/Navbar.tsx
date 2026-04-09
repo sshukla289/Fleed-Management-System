@@ -4,8 +4,8 @@ import { useAuth } from '../context/useAuth'
 
 const titles: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': {
-    title: 'Fleet dashboard',
-    subtitle: 'Overview of dispatch, maintenance, and telemetry status.',
+    title: 'Operations control tower',
+    subtitle: 'Operational KPIs, action queue, alerts, and fleet readiness.',
   },
   '/vehicles': {
     title: 'Vehicles',
@@ -14,6 +14,10 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   '/trips': {
     title: 'Trips',
     subtitle: 'Plan, validate, dispatch, and monitor active trip lifecycles.',
+  },
+  '/alerts': {
+    title: 'Alerts Center',
+    subtitle: 'Review maintenance, compliance, and trip exceptions.',
   },
   '/drivers': {
     title: 'Drivers',

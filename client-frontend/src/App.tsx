@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar'
 import { Sidebar } from './components/Sidebar'
 import { useAuth } from './context/useAuth'
 import { Dashboard } from './pages/Dashboard'
+import { AlertsCenter } from './pages/AlertsCenter'
 import { DriverList } from './pages/DriverList'
 import { Login } from './pages/Login'
 import { MaintenanceAlerts } from './pages/MaintenanceAlerts'
@@ -52,6 +53,7 @@ function App() {
           element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />}
         />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/alerts" element={<AlertsCenter />} />
         <Route path="/trips" element={<Trips />} />
         <Route path="/vehicles" element={<VehicleList />} />
         <Route path="/vehicles/:id" element={<VehicleDetail />} />

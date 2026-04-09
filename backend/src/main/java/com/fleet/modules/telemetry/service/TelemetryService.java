@@ -64,7 +64,7 @@ public class TelemetryService {
         telemetry.setTimestamp(dto.getTimestamp() != null ? dto.getTimestamp() : LocalDateTime.now());
 
         repo.save(telemetry);
-        alertService.checkAlerts(telemetry);
+        alertService.raiseTelemetryAlerts(telemetry);
     }
 
     public List<TelemetryDTO> getTelemetry(String vehicleId) {

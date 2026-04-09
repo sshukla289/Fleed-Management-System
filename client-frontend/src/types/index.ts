@@ -4,6 +4,18 @@ export type TripPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type TripDispatchStatus = 'NOT_DISPATCHED' | 'QUEUED' | 'DISPATCHED' | 'RELEASED'
 export type TripComplianceStatus = 'PENDING' | 'COMPLIANT' | 'REVIEW_REQUIRED' | 'BLOCKED'
 export type TripOptimizationStatus = 'NOT_STARTED' | 'READY' | 'OPTIMIZED' | 'FAILED'
+export type AlertCategory =
+  | 'MAINTENANCE'
+  | 'SAFETY'
+  | 'COMPLIANCE'
+  | 'DISPATCH_EXCEPTION'
+  | 'TRIP_DELAY'
+  | 'ROUTE_DEVIATION'
+  | 'LOW_FUEL'
+  | 'TELEMETRY_OFFLINE'
+export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+export type AlertLifecycleStatus = 'OPEN' | 'ACKNOWLEDGED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
+export type MaintenanceScheduleStatus = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
 
 export interface Vehicle {
   id: string
@@ -123,6 +135,160 @@ export interface CompleteTripInput {
   actualDistance: number
   actualDuration?: string
   remarks?: string
+}
+
+export interface Alert {
+  id: string
+  category: AlertCategory
+  severity: AlertSeverity
+  status: AlertLifecycleStatus
+  title: string
+  description: string
+  sourceType?: string | null
+  sourceId?: string | null
+  relatedTripId?: string | null
+  relatedVehicleId?: string | null
+  metadataJson?: string | null
+  createdAt: string
+  updatedAt: string
+  acknowledgedAt?: string | null
+  resolvedAt?: string | null
+  closedAt?: string | null
+}
+
+export interface CreateAlertInput {
+  category: AlertCategory
+  severity: AlertSeverity
+  title: string
+  description: string
+  sourceType?: string
+  sourceId?: string
+  relatedTripId?: string
+  relatedVehicleId?: string
+  metadataJson?: string
+}
+
+export interface MaintenanceSchedule {
+  id: string
+  vehicleId: string
+  title: string
+  status: MaintenanceScheduleStatus
+  plannedStartDate: string
+  plannedEndDate: string
+  blockDispatch: boolean
+  reasonCode?: string | null
+  notes?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateMaintenanceScheduleInput {
+  vehicleId: string
+  title: string
+  status: MaintenanceScheduleStatus
+  plannedStartDate: string
+  plannedEndDate: string
+  blockDispatch: boolean
+  reasonCode?: string
+  notes?: string
+}
+
+export interface ComplianceCheck {
+  code: string
+  label: string
+  passed: boolean
+  blocking: boolean
+  message: string
+}
+
+export interface ComplianceCheckResult {
+  tripId: string
+  compliant: boolean
+  complianceStatus: TripComplianceStatus
+  checks: ComplianceCheck[]
+  blockingReasons: string[]
+  warnings: string[]
+  recommendedAction: string
+}
+
+export interface DashboardKpi {
+  key: string
+  label: string
+  value: string
+  note: string
+  tone: 'blue' | 'mint' | 'amber' | 'violet' | 'rose' | 'teal'
+}
+
+export interface DashboardTripDelay {
+  tripId: string
+  routeId: string
+  vehicleId: string
+  driverId: string
+  status: TripStatus
+  minutesLate: number
+  plannedEndTime: string
+  reason: string
+}
+
+export interface DashboardAlertSummary {
+  id: string
+  category: AlertCategory
+  severity: AlertSeverity
+  status: AlertLifecycleStatus
+  title: string
+  relatedTripId?: string | null
+  relatedVehicleId?: string | null
+  createdAt: string
+}
+
+export interface DashboardResource {
+  id: string
+  title: string
+  subtitle: string
+  status: string
+  note: string
+  actionPath: string
+}
+
+export interface DashboardActionQueueItem {
+  id: string
+  category: string
+  title: string
+  status: string
+  priority: string
+  note: string
+  relatedTripId?: string | null
+  relatedVehicleId?: string | null
+  actionLabel: string
+  actionPath: string
+}
+
+export interface DashboardExceptionItem {
+  id: string
+  category: string
+  severity: string
+  title: string
+  message: string
+  status: string
+  relatedTripId?: string | null
+  relatedVehicleId?: string | null
+  updatedAt?: string | null
+}
+
+export interface DashboardAnalytics {
+  generatedAt: string
+  kpis: DashboardKpi[]
+  activeTrips: number
+  delayedTrips: number
+  criticalAlerts: number
+  availableVehicles: number
+  vehiclesInMaintenance: number
+  driversOnDuty: number
+  fleetReadinessPercent: number
+  delayedTripsSummary: DashboardTripDelay[]
+  criticalAlertSummary: DashboardAlertSummary[]
+  blockedVehicles: DashboardResource[]
+  driversOnDutySnapshot: DashboardResource[]
 }
 
 export interface MaintenanceAlert {

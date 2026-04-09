@@ -1,16 +1,23 @@
 import type {
   AssignShiftInput,
   AuthSession,
+  Alert,
   CompleteTripInput,
   ChangePasswordInput,
+  ComplianceCheckResult,
   CreateMaintenanceAlertInput,
+  CreateMaintenanceScheduleInput,
   CreateDriverInput,
   CreateTripInput,
   CreateRoutePlanInput,
   CreateVehicleInput,
   Driver,
+  DashboardActionQueueItem,
+  DashboardAnalytics,
+  DashboardExceptionItem,
   LoginCredentials,
   MaintenanceAlert,
+  MaintenanceSchedule,
   Trip,
   TripOptimizationResult,
   TripValidationResult,
@@ -135,6 +142,92 @@ let maintenanceAlerts: MaintenanceAlert[] = [
     severity: 'Low',
     dueDate: '2026-04-08',
     description: 'Temperature drift detected during cold-chain simulation.',
+  },
+]
+
+let alerts: Alert[] = [
+  {
+    id: 'AL-1',
+    category: 'MAINTENANCE',
+    severity: 'CRITICAL',
+    status: 'OPEN',
+    title: 'Brake pad replacement',
+    description: 'Brake wear threshold exceeded during latest inspection.',
+    sourceType: 'maintenance',
+    sourceId: 'MA-1',
+    relatedTripId: null,
+    relatedVehicleId: 'VH-103',
+    metadataJson: '{"reasonCode":"BRAKE_INSPECTION"}',
+    createdAt: '2026-04-09T07:00:00',
+    updatedAt: '2026-04-09T07:00:00',
+    acknowledgedAt: null,
+    resolvedAt: null,
+    closedAt: null,
+  },
+  {
+    id: 'AL-2',
+    category: 'COMPLIANCE',
+    severity: 'HIGH',
+    status: 'ACKNOWLEDGED',
+    title: 'Driver hour review',
+    description: 'Trip TRIP-1002 is blocked by duty-hour and license checks.',
+    sourceType: 'compliance',
+    sourceId: 'TRIP-1002',
+    relatedTripId: 'TRIP-1002',
+    relatedVehicleId: 'VH-103',
+    metadataJson: '{"blockingReasons":["Driver is off duty and cannot be dispatched.","Vehicle is in maintenance and cannot be dispatched."]}',
+    createdAt: '2026-04-09T08:00:00',
+    updatedAt: '2026-04-09T08:30:00',
+    acknowledgedAt: '2026-04-09T08:15:00',
+    resolvedAt: null,
+    closedAt: null,
+  },
+  {
+    id: 'AL-3',
+    category: 'LOW_FUEL',
+    severity: 'MEDIUM',
+    status: 'OPEN',
+    title: 'Fuel reserve warning',
+    description: 'Vehicle VH-102 fuel level dropped below the preferred threshold.',
+    sourceType: 'telemetry',
+    sourceId: 'VH-102',
+    relatedTripId: null,
+    relatedVehicleId: 'VH-102',
+    metadataJson: '{"fuelLevel":18}',
+    createdAt: '2026-04-09T08:45:00',
+    updatedAt: '2026-04-09T08:45:00',
+    acknowledgedAt: null,
+    resolvedAt: null,
+    closedAt: null,
+  },
+]
+
+let maintenanceSchedules: MaintenanceSchedule[] = [
+  {
+    id: 'MS-1',
+    vehicleId: 'VH-103',
+    title: 'Brake inspection bay visit',
+    status: 'PLANNED',
+    plannedStartDate: '2026-04-09',
+    plannedEndDate: '2026-04-10',
+    blockDispatch: true,
+    reasonCode: 'BRAKE_INSPECTION',
+    notes: 'Blocks dispatch until brake system inspection is signed off.',
+    createdAt: '2026-04-09T06:00:00',
+    updatedAt: '2026-04-09T06:00:00',
+  },
+  {
+    id: 'MS-2',
+    vehicleId: 'VH-102',
+    title: 'Refrigeration recalibration',
+    status: 'IN_PROGRESS',
+    plannedStartDate: '2026-04-09',
+    plannedEndDate: '2026-04-11',
+    blockDispatch: true,
+    reasonCode: 'COLD_CHAIN',
+    notes: 'Cold chain unit requires recalibration before release.',
+    createdAt: '2026-04-09T06:30:00',
+    updatedAt: '2026-04-09T06:30:00',
   },
 ]
 
@@ -273,6 +366,23 @@ function nextMaintenanceAlertId() {
   }, 0)
 
   return `MA-${maxAlertNumber + 1}`
+}
+
+function cloneAlert(alert: Alert): Alert {
+  return { ...alert }
+}
+
+function cloneMaintenanceSchedule(schedule: MaintenanceSchedule): MaintenanceSchedule {
+  return { ...schedule }
+}
+
+function nextMaintenanceScheduleId() {
+  const maxScheduleNumber = maintenanceSchedules.reduce((max, schedule) => {
+    const scheduleNumber = Number(schedule.id.replace('MS-', ''))
+    return Number.isFinite(scheduleNumber) ? Math.max(max, scheduleNumber) : max
+  }, 0)
+
+  return `MS-${maxScheduleNumber + 1}`
 }
 
 function cloneRoutePlan(route: RoutePlan): RoutePlan {
@@ -472,6 +582,374 @@ function optimizeTripDuration(duration: string, currentDistance: number, optimiz
   const distanceRatio = optimizedDistance / currentDistance
   const optimizedMinutes = Math.round(currentMinutes * distanceRatio)
   return formatTripDurationMinutes(Math.max(15, optimizedMinutes))
+}
+
+function parseDateTime(value?: string | null) {
+  if (!value) {
+    return null
+  }
+
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function isTripDelayed(trip: Trip, now = new Date()) {
+  const plannedEnd = parseDateTime(trip.plannedEndTime)
+  if (!plannedEnd) {
+    return false
+  }
+
+  if (trip.status === 'COMPLETED' && trip.actualEndTime) {
+    const actualEnd = parseDateTime(trip.actualEndTime)
+    return actualEnd ? actualEnd > plannedEnd : false
+  }
+
+  return ['DRAFT', 'VALIDATED', 'OPTIMIZED', 'DISPATCHED', 'IN_PROGRESS'].includes(trip.status) && plannedEnd < now
+}
+
+function buildDashboardAnalyticsFallback(): DashboardAnalytics {
+  const now = new Date()
+  const openCriticalAlerts = alerts.filter(
+    (alert) => alert.severity === 'CRITICAL' && ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS'].includes(alert.status),
+  )
+  const blockingVehicleIds = new Set(
+    maintenanceSchedules
+      .filter((schedule) => schedule.blockDispatch && ['PLANNED', 'IN_PROGRESS'].includes(schedule.status))
+      .map((schedule) => schedule.vehicleId),
+  )
+  const activeTrips = trips.filter((trip) => ['DISPATCHED', 'IN_PROGRESS'].includes(trip.status))
+  const delayedTrips = trips.filter((trip) => isTripDelayed(trip, now))
+  const availableVehicles = vehicles.filter(
+    (vehicle) => vehicle.status !== 'Maintenance' && !blockingVehicleIds.has(vehicle.id),
+  )
+  const driversOnDuty = drivers.filter((driver) => driver.status === 'On Duty')
+
+  return {
+    generatedAt: now.toISOString(),
+    kpis: [
+      {
+        key: 'active-trips',
+        label: 'Active trips',
+        value: String(activeTrips.length),
+        note: 'Trips currently in motion',
+        tone: 'blue',
+      },
+      {
+        key: 'delayed-trips',
+        label: 'Delayed trips',
+        value: String(delayedTrips.length),
+        note: 'Trips beyond their planned window',
+        tone: 'rose',
+      },
+      {
+        key: 'critical-alerts',
+        label: 'Critical alerts',
+        value: String(openCriticalAlerts.length),
+        note: 'Open items requiring intervention',
+        tone: 'amber',
+      },
+      {
+        key: 'available-vehicles',
+        label: 'Available vehicles',
+        value: String(availableVehicles.length),
+        note: 'Fleet units cleared for dispatch',
+        tone: 'mint',
+      },
+      {
+        key: 'blocked-vehicles',
+        label: 'Blocked vehicles',
+        value: String(vehicles.length - availableVehicles.length),
+        note: 'Vehicles under maintenance or hold',
+        tone: 'violet',
+      },
+      {
+        key: 'drivers-on-duty',
+        label: 'Drivers on duty',
+        value: String(driversOnDuty.length),
+        note: 'Available crew for active trips',
+        tone: 'teal',
+      },
+    ],
+    activeTrips: activeTrips.length,
+    delayedTrips: delayedTrips.length,
+    criticalAlerts: openCriticalAlerts.length,
+    availableVehicles: availableVehicles.length,
+    vehiclesInMaintenance: vehicles.length - availableVehicles.length,
+    driversOnDuty: driversOnDuty.length,
+    fleetReadinessPercent: vehicles.length ? Math.round((availableVehicles.length / vehicles.length) * 1000) / 10 : 0,
+    delayedTripsSummary: delayedTrips.slice(0, 5).map((trip) => ({
+      tripId: trip.tripId,
+      routeId: trip.routeId,
+      vehicleId: trip.assignedVehicleId,
+      driverId: trip.assignedDriverId,
+      status: trip.status,
+      minutesLate: Math.max(0, Math.round((now.getTime() - (parseDateTime(trip.plannedEndTime)?.getTime() ?? now.getTime())) / 60000)),
+      plannedEndTime: trip.plannedEndTime ?? now.toISOString(),
+      reason: 'Trip is still active beyond its planned end time.',
+    })),
+    criticalAlertSummary: openCriticalAlerts.slice(0, 5).map((alert) => ({
+      id: alert.id,
+      category: alert.category,
+      severity: alert.severity,
+      status: alert.status,
+      title: alert.title,
+      relatedTripId: alert.relatedTripId,
+      relatedVehicleId: alert.relatedVehicleId,
+      createdAt: alert.createdAt,
+    })),
+    blockedVehicles: vehicles
+      .filter((vehicle) => vehicle.status === 'Maintenance' || blockingVehicleIds.has(vehicle.id))
+      .slice(0, 5)
+      .map((vehicle) => ({
+        id: vehicle.id,
+        title: vehicle.name,
+        subtitle: vehicle.location,
+        status: vehicle.status,
+        note: vehicle.status === 'Maintenance' ? 'Vehicle status is Maintenance' : 'Blocked by maintenance schedule',
+        actionPath: `/vehicles/${vehicle.id}`,
+      })),
+    driversOnDutySnapshot: driversOnDuty.slice(0, 5).map((driver) => ({
+      id: driver.id,
+      title: driver.name,
+      subtitle: driver.licenseType,
+      status: driver.status,
+      note: driver.assignedVehicleId ? `Vehicle ${driver.assignedVehicleId}` : 'No vehicle assigned',
+      actionPath: '/drivers',
+    })),
+  }
+}
+
+function buildActionQueueFallback(): DashboardActionQueueItem[] {
+  const queue: DashboardActionQueueItem[] = []
+
+  trips
+    .filter((trip) => ['DRAFT', 'VALIDATED', 'OPTIMIZED', 'DISPATCHED', 'IN_PROGRESS', 'BLOCKED'].includes(trip.status))
+    .forEach((trip) => {
+      if (trip.status === 'DRAFT') {
+        queue.push({
+          id: trip.tripId,
+          category: 'TRIP',
+          title: `Validate trip ${trip.tripId}`,
+          status: trip.status,
+          priority: trip.priority,
+          note: 'Planner input is ready for validation.',
+          relatedTripId: trip.tripId,
+          relatedVehicleId: trip.assignedVehicleId,
+          actionLabel: 'Validate',
+          actionPath: '/trips',
+        })
+      } else if (trip.status === 'VALIDATED') {
+        queue.push({
+          id: trip.tripId,
+          category: 'TRIP',
+          title: `Optimize trip ${trip.tripId}`,
+          status: trip.status,
+          priority: trip.priority,
+          note: 'Validation passed and optimization can run.',
+          relatedTripId: trip.tripId,
+          relatedVehicleId: trip.assignedVehicleId,
+          actionLabel: 'Optimize',
+          actionPath: '/trips',
+        })
+      } else if (trip.status === 'OPTIMIZED') {
+        queue.push({
+          id: trip.tripId,
+          category: 'TRIP',
+          title: `Dispatch trip ${trip.tripId}`,
+          status: trip.status,
+          priority: trip.priority,
+          note: 'Route plan is optimized and ready for dispatch.',
+          relatedTripId: trip.tripId,
+          relatedVehicleId: trip.assignedVehicleId,
+          actionLabel: 'Dispatch',
+          actionPath: '/trips',
+        })
+      } else if (trip.status === 'DISPATCHED') {
+        queue.push({
+          id: trip.tripId,
+          category: 'TRIP',
+          title: `Start trip ${trip.tripId}`,
+          status: trip.status,
+          priority: trip.priority,
+          note: 'Vehicle is dispatched and waiting for trip start confirmation.',
+          relatedTripId: trip.tripId,
+          relatedVehicleId: trip.assignedVehicleId,
+          actionLabel: 'Start',
+          actionPath: '/trips',
+        })
+      } else if (trip.status === 'IN_PROGRESS') {
+        queue.push({
+          id: trip.tripId,
+          category: 'TRIP',
+          title: `Monitor trip ${trip.tripId}`,
+          status: trip.status,
+          priority: trip.priority,
+          note: 'Trip is live and telemetry is available.',
+          relatedTripId: trip.tripId,
+          relatedVehicleId: trip.assignedVehicleId,
+          actionLabel: 'View trip',
+          actionPath: '/trips',
+        })
+      } else {
+        queue.push({
+          id: trip.tripId,
+          category: 'TRIP',
+          title: `Review blocked trip ${trip.tripId}`,
+          status: trip.status,
+          priority: trip.priority,
+          note: 'Trip is blocked by compliance, maintenance, or assignment checks.',
+          relatedTripId: trip.tripId,
+          relatedVehicleId: trip.assignedVehicleId,
+          actionLabel: 'Review',
+          actionPath: '/trips',
+        })
+      }
+    })
+
+  alerts
+    .filter((alert) => alert.severity === 'CRITICAL' && ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS'].includes(alert.status))
+    .forEach((alert) => {
+      queue.push({
+        id: alert.id,
+        category: alert.category,
+        title: alert.title,
+        status: alert.status,
+        priority: alert.severity,
+        note: alert.description,
+        relatedTripId: alert.relatedTripId,
+        relatedVehicleId: alert.relatedVehicleId,
+        actionLabel: 'Acknowledge',
+        actionPath: '/alerts',
+      })
+    })
+
+  maintenanceSchedules
+    .filter((schedule) => schedule.blockDispatch && ['PLANNED', 'IN_PROGRESS'].includes(schedule.status))
+    .forEach((schedule) => {
+      queue.push({
+        id: schedule.id,
+        category: 'MAINTENANCE',
+        title: schedule.title,
+        status: schedule.status,
+        priority: 'HIGH',
+        note: schedule.notes ?? 'Maintenance block requires review.',
+        relatedTripId: null,
+        relatedVehicleId: schedule.vehicleId,
+        actionLabel: 'Review schedule',
+        actionPath: '/maintenance',
+      })
+    })
+
+  return queue
+    .sort((left, right) => {
+      const priorityRank = (priority: string) => {
+        switch (priority.toUpperCase()) {
+          case 'CRITICAL':
+            return 0
+          case 'HIGH':
+            return 1
+          case 'MEDIUM':
+            return 2
+          case 'LOW':
+            return 3
+          default:
+            return 99
+        }
+      }
+
+      return priorityRank(left.priority) - priorityRank(right.priority) || left.title.localeCompare(right.title)
+    })
+    .slice(0, 12)
+}
+
+function buildExceptionFallback(): DashboardExceptionItem[] {
+  const items: DashboardExceptionItem[] = []
+  const now = new Date()
+
+  trips.forEach((trip) => {
+    if (trip.status === 'BLOCKED') {
+      items.push({
+        id: trip.tripId,
+        category: 'TRIP_BLOCKED',
+        severity: 'HIGH',
+        title: `Trip ${trip.tripId} blocked`,
+        message: 'Trip is blocked by compliance, maintenance, or assignment checks.',
+        status: trip.status,
+        relatedTripId: trip.tripId,
+        relatedVehicleId: trip.assignedVehicleId,
+        updatedAt: trip.actualEndTime ?? trip.plannedEndTime ?? null,
+      })
+    }
+
+    if (isTripDelayed(trip, now)) {
+      items.push({
+        id: `${trip.tripId}-delay`,
+        category: 'TRIP_DELAY',
+        severity: 'HIGH',
+        title: `Trip ${trip.tripId} delayed`,
+        message: 'Trip is still active beyond its planned end time.',
+        status: trip.status,
+        relatedTripId: trip.tripId,
+        relatedVehicleId: trip.assignedVehicleId,
+        updatedAt: trip.actualEndTime ?? trip.plannedEndTime ?? null,
+      })
+    }
+  })
+
+  alerts
+    .filter((alert) => ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS'].includes(alert.status))
+    .forEach((alert) => {
+      items.push({
+        id: alert.id,
+        category: alert.category,
+        severity: alert.severity,
+        title: alert.title,
+        message: alert.description,
+        status: alert.status,
+        relatedTripId: alert.relatedTripId,
+        relatedVehicleId: alert.relatedVehicleId,
+        updatedAt: alert.updatedAt,
+      })
+    })
+
+  maintenanceSchedules
+    .filter((schedule) => schedule.blockDispatch && ['PLANNED', 'IN_PROGRESS'].includes(schedule.status))
+    .forEach((schedule) => {
+      items.push({
+        id: schedule.id,
+        category: 'MAINTENANCE_BLOCK',
+        severity: 'HIGH',
+        title: schedule.title,
+        message: schedule.notes ?? 'Dispatch is blocked until the schedule is cleared.',
+        status: schedule.status,
+        relatedTripId: null,
+        relatedVehicleId: schedule.vehicleId,
+        updatedAt: schedule.updatedAt,
+      })
+    })
+
+  return items
+    .sort((left, right) => {
+      const severityRank = (severity: string) => {
+        switch (severity.toUpperCase()) {
+          case 'CRITICAL':
+            return 0
+          case 'HIGH':
+            return 1
+          case 'MEDIUM':
+            return 2
+          case 'LOW':
+            return 3
+          default:
+            return 99
+        }
+      }
+
+      const leftUpdated = left.updatedAt ? new Date(left.updatedAt).getTime() : 0
+      const rightUpdated = right.updatedAt ? new Date(right.updatedAt).getTime() : 0
+      return severityRank(left.severity) - severityRank(right.severity) || rightUpdated - leftUpdated
+    })
+    .slice(0, 20)
 }
 
 function cloneTripList() {
@@ -879,6 +1357,176 @@ export async function deleteMaintenanceAlert(id: string): Promise<void> {
     console.warn('Falling back to mock API data:', error)
     maintenanceAlerts = maintenanceAlerts.filter((alert) => alert.id !== id)
   }
+}
+
+export function fetchAlerts(): Promise<Alert[]> {
+  return withFallback(() => request<Alert[]>('/alerts'), alerts.map(cloneAlert))
+}
+
+export function fetchAlertById(id: string): Promise<Alert> {
+  return withFallback(
+    () => request<Alert>(`/alerts/${id}`),
+    (() => {
+      const alert = alerts.find((item) => item.id === id)
+      if (!alert) {
+        throw new Error('Alert not found')
+      }
+      return cloneAlert(alert)
+    })(),
+  )
+}
+
+export async function acknowledgeAlert(id: string): Promise<Alert> {
+  try {
+    return await request<Alert>(`/alerts/${id}/acknowledge`, {
+      method: 'POST',
+    })
+  } catch (error) {
+    if (!USE_MOCK_API) {
+      throw error
+    }
+    console.warn('Falling back to mock API data:', error)
+    const updatedAlert = alerts.find((alert) => alert.id === id)
+    if (!updatedAlert) {
+      throw new Error('Alert not found')
+    }
+    updatedAlert.status = 'ACKNOWLEDGED'
+    updatedAlert.acknowledgedAt = updatedAlert.acknowledgedAt ?? new Date().toISOString()
+    updatedAlert.updatedAt = new Date().toISOString()
+    return cloneAlert(updatedAlert)
+  }
+}
+
+export async function resolveAlert(id: string): Promise<Alert> {
+  try {
+    return await request<Alert>(`/alerts/${id}/resolve`, {
+      method: 'POST',
+    })
+  } catch (error) {
+    if (!USE_MOCK_API) {
+      throw error
+    }
+    console.warn('Falling back to mock API data:', error)
+    const updatedAlert = alerts.find((alert) => alert.id === id)
+    if (!updatedAlert) {
+      throw new Error('Alert not found')
+    }
+    updatedAlert.status = 'RESOLVED'
+    updatedAlert.resolvedAt = new Date().toISOString()
+    updatedAlert.updatedAt = new Date().toISOString()
+    return cloneAlert(updatedAlert)
+  }
+}
+
+export function fetchMaintenanceSchedules(): Promise<MaintenanceSchedule[]> {
+  return withFallback(
+    () => request<MaintenanceSchedule[]>('/maintenance/schedules'),
+    maintenanceSchedules.map(cloneMaintenanceSchedule),
+  )
+}
+
+export async function createMaintenanceSchedule(
+  input: CreateMaintenanceScheduleInput,
+): Promise<MaintenanceSchedule> {
+  try {
+    return await request<MaintenanceSchedule>('/maintenance/schedules', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  } catch (error) {
+    if (!USE_MOCK_API) {
+      throw error
+    }
+    console.warn('Falling back to mock API data:', error)
+    const createdSchedule: MaintenanceSchedule = {
+      id: nextMaintenanceScheduleId(),
+      ...input,
+      reasonCode: input.reasonCode ?? null,
+      notes: input.notes ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    maintenanceSchedules = [...maintenanceSchedules, createdSchedule]
+    return cloneMaintenanceSchedule(createdSchedule)
+  }
+}
+
+export function fetchDashboardAnalytics(): Promise<DashboardAnalytics> {
+  return withFallback(() => request<DashboardAnalytics>('/analytics/dashboard'), buildDashboardAnalyticsFallback())
+}
+
+export function fetchDashboardActionQueue(): Promise<DashboardActionQueueItem[]> {
+  return withFallback(
+    () => request<DashboardActionQueueItem[]>('/dashboard/action-queue'),
+    buildActionQueueFallback(),
+  )
+}
+
+export function fetchDashboardExceptions(): Promise<DashboardExceptionItem[]> {
+  return withFallback(
+    () => request<DashboardExceptionItem[]>('/dashboard/exceptions'),
+    buildExceptionFallback(),
+  )
+}
+
+export function fetchComplianceCheck(tripId: string): Promise<ComplianceCheckResult> {
+  return withFallback(
+    () => request<ComplianceCheckResult>(`/compliance/checks/${tripId}`),
+    (() => {
+      const trip = trips.find((item) => item.tripId === tripId)
+      if (!trip) {
+        throw new Error('Trip not found')
+      }
+
+      const vehicle = vehicles.find((item) => item.id === trip.assignedVehicleId)
+      const driver = drivers.find((item) => item.id === trip.assignedDriverId)
+      const maintenanceBlocked = maintenanceSchedules.some(
+        (schedule) => schedule.vehicleId === trip.assignedVehicleId && schedule.blockDispatch && ['PLANNED', 'IN_PROGRESS'].includes(schedule.status),
+      )
+      const blockingReasons: string[] = []
+      const checks: ComplianceCheckResult['checks'] = []
+
+      const vehicleAvailable = vehicle ? vehicle.status !== 'Maintenance' : false
+      checks.push({
+        code: 'vehicle-availability',
+        label: 'Vehicle availability',
+        passed: vehicleAvailable,
+        blocking: !vehicleAvailable,
+        message: vehicleAvailable ? 'Vehicle is available.' : 'Vehicle is in maintenance and cannot be dispatched.',
+      })
+      if (!vehicleAvailable) blockingReasons.push('Vehicle is in maintenance and cannot be dispatched.')
+
+      const driverAvailable = driver ? driver.status !== 'Off Duty' : false
+      checks.push({
+        code: 'driver-availability',
+        label: 'Driver availability',
+        passed: driverAvailable,
+        blocking: !driverAvailable,
+        message: driverAvailable ? 'Driver is available.' : 'Driver is off duty and cannot be dispatched.',
+      })
+      if (!driverAvailable) blockingReasons.push('Driver is off duty and cannot be dispatched.')
+
+      checks.push({
+        code: 'maintenance-block',
+        label: 'Maintenance block',
+        passed: !maintenanceBlocked,
+        blocking: maintenanceBlocked,
+        message: maintenanceBlocked ? 'Vehicle has a blocking maintenance schedule.' : 'No maintenance block detected.',
+      })
+      if (maintenanceBlocked) blockingReasons.push('Vehicle has a blocking maintenance schedule.')
+
+      const compliant = blockingReasons.length === 0
+      return {
+        tripId,
+        compliant,
+        complianceStatus: compliant ? 'COMPLIANT' : 'BLOCKED',
+        checks,
+        blockingReasons,
+        warnings: compliant ? ['Mock compliance mode enabled.'] : [],
+        recommendedAction: compliant ? 'Proceed to optimization and dispatch.' : 'Resolve blockers before dispatch.',
+      }
+    })(),
+  )
 }
 
 export async function assignShift(input: AssignShiftInput): Promise<Driver> {

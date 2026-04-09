@@ -299,3 +299,41 @@ The app is being refactored from a CRUD demo into a control tower.
 - Spring Boot API on the existing port configuration.
 - MySQL remains the persistence layer.
 
+## Phase 2 control tower
+
+The app now uses a server-driven operations layer built around the trip lifecycle.
+
+### New backend endpoints
+
+- `GET /api/analytics/dashboard`
+- `GET /api/dashboard/action-queue`
+- `GET /api/dashboard/exceptions`
+- `GET /api/alerts`
+- `GET /api/alerts/{id}`
+- `POST /api/alerts/{id}/acknowledge`
+- `POST /api/alerts/{id}/resolve`
+- `GET /api/maintenance/schedules`
+- `POST /api/maintenance/schedules`
+- `GET /api/compliance/checks/{tripId}`
+
+### Operational flow
+
+1. Login
+2. Dashboard shows operational KPIs and the action queue
+3. Planner creates or imports trips
+4. Validation checks vehicle, driver, maintenance, and compliance readiness
+5. Route optimization runs with trip constraints
+6. Dispatch only happens when the trip is clear
+7. Telemetry stays trip-linked for live tracking
+8. Alerts are raised from telemetry, dispatch, and operational events
+9. Dashboard highlights exceptions, delays, and maintenance holds
+10. Trips are closed with actual time and distance data
+11. Post-trip analytics and maintenance scheduling can be added in Phase 3
+
+### Migration notes
+
+- `alerts` is now a first-class table for the generalized alert engine.
+- `maintenance_schedules` controls dispatch blocking for vehicles under maintenance.
+- `telemetry.trip_id` links live telemetry to a trip record.
+- Trips remain the central aggregate, and validation/dispatch now depend on server-side compliance checks.
+- Frontend mock mode should stay opt-in only via `VITE_USE_MOCK_API=true`.

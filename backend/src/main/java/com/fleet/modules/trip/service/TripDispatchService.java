@@ -1,5 +1,7 @@
 package com.fleet.modules.trip.service;
 
+import com.fleet.modules.compliance.dto.ComplianceCheckResultDTO;
+import com.fleet.modules.compliance.service.ComplianceService;
 import com.fleet.modules.driver.entity.Driver;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.trip.dto.CompleteTripRequest;
@@ -20,16 +22,33 @@ public class TripDispatchService {
 
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
+    private final ComplianceService complianceService;
 
-    public TripDispatchService(VehicleRepository vehicleRepository, DriverRepository driverRepository) {
+    public TripDispatchService(
+        VehicleRepository vehicleRepository,
+        DriverRepository driverRepository,
+        ComplianceService complianceService
+    ) {
         this.vehicleRepository = vehicleRepository;
         this.driverRepository = driverRepository;
+        this.complianceService = complianceService;
     }
 
     @Transactional
     public Trip dispatch(Trip trip) {
         ensureDispatchable(trip);
         ensureAssignmentsPresent(trip);
+
+        ComplianceCheckResultDTO complianceResult = complianceService.evaluateTrip(trip);
+        trip.setComplianceStatus(complianceResult.complianceStatus());
+        if (!complianceResult.compliant()) {
+            trip.setStatus(TripStatus.BLOCKED);
+            trip.setDispatchStatus(TripDispatchStatus.NOT_DISPATCHED);
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                String.join(" ", complianceResult.blockingReasons())
+            );
+        }
 
         Vehicle vehicle = vehicleRepository.findById(trip.getAssignedVehicleId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assigned vehicle not found."));

@@ -11,6 +11,7 @@ const groups = [
     items: [
       { label: 'Vehicles', path: '/vehicles', icon: '02' },
       { label: 'Trips', path: '/trips', icon: '05' },
+      { label: 'Alerts', path: '/alerts', icon: 'AL' },
       { label: 'Drivers', path: '/drivers', icon: '03' },
       { label: 'Routes', path: '/routes', icon: '04' },
     ],

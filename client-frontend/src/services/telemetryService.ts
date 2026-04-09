@@ -1,6 +1,7 @@
 import type { CreateTelemetryInput, TelemetryData } from '../types'
 
 const DEFAULT_API_BASE_URL = 'http://localhost:8080/api'
+const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === 'true'
 
 function getApiBaseUrl() {
   const runtimeConfig = globalThis as { __API_BASE_URL__?: string }
@@ -59,7 +60,7 @@ function mapTelemetryPoint(point: ApiTelemetryPoint, index: number): TelemetryDa
 }
 
 export async function fetchVehicleTelemetry(vehicleId: string): Promise<TelemetryData[]> {
-  if (typeof fetch !== 'function') {
+  if (USE_MOCK_API && typeof fetch !== 'function') {
     return buildMockTelemetry(vehicleId)
   }
 
@@ -73,13 +74,16 @@ export async function fetchVehicleTelemetry(vehicleId: string): Promise<Telemetr
     const data = (await response.json()) as ApiTelemetryPoint[]
     return data.map(mapTelemetryPoint)
   } catch (error) {
+    if (!USE_MOCK_API) {
+      throw error
+    }
     console.warn('Falling back to mock telemetry data:', error)
     return buildMockTelemetry(vehicleId)
   }
 }
 
 export async function submitVehicleTelemetry(input: CreateTelemetryInput): Promise<TelemetryData> {
-  if (typeof fetch !== 'function') {
+  if (USE_MOCK_API && typeof fetch !== 'function') {
     return createMockTelemetryPoint(input)
   }
 
@@ -98,6 +102,9 @@ export async function submitVehicleTelemetry(input: CreateTelemetryInput): Promi
 
     return createMockTelemetryPoint(input)
   } catch (error) {
+    if (!USE_MOCK_API) {
+      throw error
+    }
     console.warn('Falling back to mock telemetry submission:', error)
     return createMockTelemetryPoint(input)
   }

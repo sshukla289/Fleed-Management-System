@@ -1,11 +1,19 @@
 package com.fleet.config;
 
+import com.fleet.modules.alert.entity.Alert;
+import com.fleet.modules.alert.entity.AlertCategory;
+import com.fleet.modules.alert.entity.AlertLifecycleStatus;
+import com.fleet.modules.alert.entity.AlertSeverity;
+import com.fleet.modules.alert.repository.AlertRepository;
 import com.fleet.modules.auth.entity.AppUser;
 import com.fleet.modules.auth.repository.AppUserRepository;
 import com.fleet.modules.driver.entity.Driver;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.maintenance.entity.MaintenanceAlert;
+import com.fleet.modules.maintenance.entity.MaintenanceSchedule;
+import com.fleet.modules.maintenance.entity.MaintenanceScheduleStatus;
 import com.fleet.modules.maintenance.repository.MaintenanceAlertRepository;
+import com.fleet.modules.maintenance.repository.MaintenanceScheduleRepository;
 import com.fleet.modules.route.entity.RoutePlan;
 import com.fleet.modules.route.repository.RoutePlanRepository;
 import com.fleet.modules.telemetry.entity.Telemetry;
@@ -35,6 +43,8 @@ public class DataSeeder {
         VehicleRepository vehicleRepository,
         DriverRepository driverRepository,
         MaintenanceAlertRepository maintenanceAlertRepository,
+        MaintenanceScheduleRepository maintenanceScheduleRepository,
+        AlertRepository alertRepository,
         RoutePlanRepository routePlanRepository,
         TripRepository tripRepository,
         AppUserRepository appUserRepository,
@@ -68,6 +78,87 @@ public class DataSeeder {
                 ));
             }
 
+            if (maintenanceScheduleRepository.count() == 0) {
+                maintenanceScheduleRepository.saveAll(List.of(
+                    new MaintenanceSchedule(
+                        "MS-1",
+                        "VH-103",
+                        "Brake inspection bay visit",
+                        MaintenanceScheduleStatus.PLANNED,
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(1),
+                        true,
+                        "BRAKE_INSPECTION",
+                        "Blocks dispatch until brake system inspection is signed off.",
+                        LocalDateTime.now(),
+                        LocalDateTime.now()
+                    ),
+                    new MaintenanceSchedule(
+                        "MS-2",
+                        "VH-102",
+                        "Refrigeration recalibration",
+                        MaintenanceScheduleStatus.IN_PROGRESS,
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(2),
+                        true,
+                        "COLD_CHAIN",
+                        "Cold chain unit requires recalibration before release.",
+                        LocalDateTime.now(),
+                        LocalDateTime.now()
+                    )
+                ));
+            }
+
+            if (alertRepository.count() == 0) {
+                alertRepository.saveAll(List.of(
+                    new Alert(
+                        "AL-1",
+                        AlertCategory.MAINTENANCE,
+                        AlertSeverity.CRITICAL,
+                        AlertLifecycleStatus.OPEN,
+                        "Brake pad replacement",
+                        "Brake wear threshold exceeded during latest inspection.",
+                        "maintenance",
+                        "MA-1",
+                        null,
+                        "VH-103",
+                        "{\"reasonCode\":\"BRAKE_INSPECTION\"}",
+                        LocalDateTime.now().minusHours(6),
+                        LocalDateTime.now().minusHours(6)
+                    ),
+                    new Alert(
+                        "AL-2",
+                        AlertCategory.COMPLIANCE,
+                        AlertSeverity.HIGH,
+                        AlertLifecycleStatus.ACKNOWLEDGED,
+                        "Driver hour review",
+                        "Trip TRIP-1002 is blocked by duty-hour and license checks.",
+                        "compliance",
+                        "TRIP-1002",
+                        "TRIP-1002",
+                        "VH-103",
+                        "{\"blockingReasons\":[\"Driver is off duty and cannot be dispatched.\",\"Vehicle is in maintenance and cannot be dispatched.\"]}",
+                        LocalDateTime.now().minusHours(3),
+                        LocalDateTime.now().minusHours(1)
+                    ),
+                    new Alert(
+                        "AL-3",
+                        AlertCategory.LOW_FUEL,
+                        AlertSeverity.MEDIUM,
+                        AlertLifecycleStatus.OPEN,
+                        "Fuel reserve warning",
+                        "Vehicle VH-102 fuel level dropped below the preferred threshold.",
+                        "telemetry",
+                        "VH-102",
+                        null,
+                        "VH-102",
+                        "{\"fuelLevel\":18}",
+                        LocalDateTime.now().minusHours(2),
+                        LocalDateTime.now().minusHours(2)
+                    )
+                ));
+            }
+
             if (routePlanRepository.count() == 0) {
                 routePlanRepository.saveAll(List.of(
                     new RoutePlan("RT-501", "Western Corridor Morning Run", "In Progress", 342, "6h 15m", List.of("Mumbai Hub", "Lonavala", "Pune Depot", "Satara Crossdock")),
@@ -90,8 +181,8 @@ public class DataSeeder {
                         TripDispatchStatus.DISPATCHED,
                         TripComplianceStatus.COMPLIANT,
                         TripOptimizationStatus.OPTIMIZED,
-                        LocalDateTime.now().minusHours(1),
-                        LocalDateTime.now().plusHours(5),
+                        LocalDateTime.now().minusHours(2),
+                        LocalDateTime.now().minusMinutes(30),
                         LocalDateTime.now().minusMinutes(35),
                         null,
                         342,
@@ -100,6 +191,29 @@ public class DataSeeder {
                         "2h 10m",
                         "Morning dispatch in motion.",
                         List.of("Mumbai Hub", "Lonavala", "Pune Depot", "Satara Crossdock")
+                    ),
+                    new Trip(
+                        "TRIP-1002",
+                        "RT-502",
+                        "VH-103",
+                        "DR-203",
+                        "Nagpur Service Bay",
+                        "Amravati",
+                        TripStatus.BLOCKED,
+                        TripPriority.CRITICAL,
+                        TripDispatchStatus.NOT_DISPATCHED,
+                        TripComplianceStatus.BLOCKED,
+                        TripOptimizationStatus.NOT_STARTED,
+                        LocalDateTime.now().minusHours(4),
+                        LocalDateTime.now().minusHours(1),
+                        null,
+                        null,
+                        184,
+                        0,
+                        "3h 40m",
+                        null,
+                        "Blocked by maintenance and compliance checks.",
+                        List.of("Nagpur Service Bay", "Wardha", "Amravati")
                     )
                 ));
             }
