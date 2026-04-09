@@ -14,24 +14,88 @@ function statusClassName(status: Vehicle['status']) {
   }
 }
 
+function statusLabel(status: Vehicle['status']) {
+  return status === 'Idle' ? 'Rest' : status
+}
+
 interface VehicleCardProps {
   vehicle: Vehicle
   onEdit?: (vehicle: Vehicle) => void
   onDelete?: (vehicle: Vehicle) => void
+  onSelect?: (vehicle: Vehicle) => void
   isDeleting?: boolean
+  selected?: boolean
+  variant?: 'default' | 'tracking'
 }
 
-export function VehicleCard({ vehicle, onEdit, onDelete, isDeleting = false }: VehicleCardProps) {
+export function VehicleCard({
+  vehicle,
+  onEdit,
+  onDelete,
+  onSelect,
+  isDeleting = false,
+  selected = false,
+  variant = 'default',
+}: VehicleCardProps) {
+  if (variant === 'tracking') {
+    return (
+      <article
+        aria-pressed={selected}
+        className={`vehicle-card vehicle-card--tracking${selected ? ' vehicle-card--tracking-selected' : ''}`}
+        onClick={() => onSelect?.(vehicle)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onSelect?.(vehicle)
+          }
+        }}
+        role="button"
+        tabIndex={0}
+      >
+        <div className="vehicle-card__tracking-header">
+          <div>
+            <span className="vehicle-card__tracking-eyebrow">{vehicle.id}</span>
+            <h3>{vehicle.name}</h3>
+            <p className="muted">{vehicle.type}</p>
+          </div>
+          <span className={statusClassName(vehicle.status)}>{statusLabel(vehicle.status)}</span>
+        </div>
+        <div className="vehicle-card__tracking-visual">
+          <div className="vehicle-card__tracking-truck" aria-hidden="true">
+            <span className="vehicle-card__tracking-cab" />
+            <span className="vehicle-card__tracking-trailer">
+              <span className="vehicle-card__tracking-progress" style={{ width: `${vehicle.fuelLevel}%` }} />
+            </span>
+            <span className="vehicle-card__tracking-wheel vehicle-card__tracking-wheel--front" />
+            <span className="vehicle-card__tracking-wheel vehicle-card__tracking-wheel--rear" />
+          </div>
+          <div className="vehicle-card__tracking-visual-copy">
+            <strong>{vehicle.fuelLevel}% fuel</strong>
+            <p>Fleet position from {vehicle.location}</p>
+          </div>
+        </div>
+        <div className="vehicle-card__tracking-meta">
+          <span className="badge">{vehicle.location}</span>
+          <span className="badge">{vehicle.mileage.toLocaleString()} km</span>
+        </div>
+        <div className="vehicle-card__tracking-footer">
+          <span className="muted">Driver {vehicle.driverId}</span>
+          <span className="link-button">Track vehicle</span>
+        </div>
+      </article>
+    )
+  }
+
   return (
     <article className="vehicle-card card">
       <div className="vehicle-card__header">
         <div>
           <h3>{vehicle.name}</h3>
           <p className="muted">
-            {vehicle.id} · {vehicle.type}
+            {vehicle.id} &middot; {vehicle.type}
           </p>
         </div>
-        <span className={statusClassName(vehicle.status)}>{vehicle.status}</span>
+        <span className={statusClassName(vehicle.status)}>{statusLabel(vehicle.status)}</span>
       </div>
       <div className="vehicle-card__meta">
         <span className="badge">{vehicle.location}</span>

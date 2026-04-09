@@ -447,6 +447,591 @@ input {
   font-weight: 700;
 }
 
+.vehicle-tracking-page {
+  gap: 18px;
+}
+
+.vehicle-tracking-shell {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr);
+  gap: 18px;
+  padding: 18px;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.22), transparent 26%),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.14), transparent 24%),
+    linear-gradient(180deg, #060b17 0%, #0a1022 46%, #0c1329 100%);
+  color: #e2e8f0;
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.24);
+}
+
+.vehicle-tracking-sidebar,
+.vehicle-tracking-main {
+  min-width: 0;
+}
+
+.vehicle-tracking-sidebar {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 16px;
+  border-radius: 24px;
+  background: rgba(7, 12, 26, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.vehicle-tracking-sidebar__brand {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.vehicle-tracking-sidebar__mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1d4ed8, #22c55e);
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 16px 28px rgba(37, 99, 235, 0.28);
+}
+
+.vehicle-tracking-sidebar__eyebrow,
+.vehicle-tracking-hero__eyebrow,
+.vehicle-tracking-filters__label {
+  display: block;
+  color: rgba(226, 232, 240, 0.62);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.vehicle-tracking-sidebar h2,
+.vehicle-tracking-hero h1,
+.vehicle-tracking-panel h3,
+.vehicle-tracking-form h3 {
+  margin: 4px 0 0;
+  letter-spacing: -0.04em;
+}
+
+.vehicle-tracking-sidebar p,
+.vehicle-tracking-hero p,
+.vehicle-tracking-form p {
+  margin: 6px 0 0;
+  color: rgba(226, 232, 240, 0.74);
+}
+
+.vehicle-tracking-filters {
+  display: grid;
+  gap: 10px;
+}
+
+.vehicle-tracking-filters__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vehicle-tracking-filter {
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(226, 232, 240, 0.82);
+  cursor: pointer;
+}
+
+.vehicle-tracking-filter.is-active {
+  background: linear-gradient(135deg, #2563eb, #22c55e);
+  border-color: transparent;
+  color: #fff;
+}
+
+.vehicle-tracking-search {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.vehicle-tracking-search .secondary-button {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+}
+
+.vehicle-tracking-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vehicle-tracking-stats > div,
+.vehicle-tracking-report-card,
+.vehicle-tracking-panel,
+.vehicle-tracking-hero,
+.vehicle-tracking-form {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.58);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+}
+
+.vehicle-tracking-stats > div {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 18px;
+}
+
+.vehicle-tracking-stats span,
+.vehicle-tracking-stats strong {
+  display: block;
+}
+
+.vehicle-tracking-stats span {
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vehicle-tracking-stats strong {
+  font-size: 1.25rem;
+}
+
+.vehicle-tracking-list {
+  display: grid;
+  gap: 12px;
+  max-height: 48vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.vehicle-tracking-empty {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(148, 163, 184, 0.26);
+  color: rgba(226, 232, 240, 0.72);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.vehicle-tracking-create {
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vehicle-tracking-main {
+  display: grid;
+  gap: 14px;
+}
+
+.vehicle-tracking-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border-radius: 24px;
+}
+
+.vehicle-tracking-hero h1 {
+  font-size: clamp(1.7rem, 2.6vw, 2.4rem);
+}
+
+.vehicle-tracking-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vehicle-tracking-hero .secondary-button {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+}
+
+.vehicle-tracking-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vehicle-tracking-tab {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(226, 232, 240, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.vehicle-tracking-tab.is-active {
+  background: rgba(37, 99, 235, 0.22);
+  color: #fff;
+  border-color: rgba(37, 99, 235, 0.36);
+}
+
+.vehicle-tracking-form {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 24px;
+}
+
+.vehicle-tracking-form .input-group input,
+.vehicle-tracking-form .input-group select,
+.vehicle-tracking-form .input-group textarea {
+  background: rgba(15, 23, 42, 0.78);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.vehicle-tracking-detail-grid {
+  display: grid;
+  grid-template-columns: 1.08fr 1fr;
+  gap: 14px;
+}
+
+.vehicle-tracking-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 24px;
+}
+
+.vehicle-tracking-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vehicle-tracking-panel .badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+}
+
+.vehicle-tracking-truck {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(15, 23, 42, 0.05)),
+    rgba(255, 255, 255, 0.04);
+}
+
+.vehicle-tracking-truck__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vehicle-tracking-truck__label span {
+  color: rgba(226, 232, 240, 0.72);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.vehicle-tracking-truck__label strong {
+  font-size: 1.9rem;
+  letter-spacing: -0.05em;
+}
+
+.vehicle-tracking-truck__body {
+  position: relative;
+  height: 96px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.25), rgba(15, 23, 42, 0.55)),
+    linear-gradient(135deg, rgba(226, 232, 240, 0.08), rgba(255, 255, 255, 0.04));
+}
+
+.vehicle-tracking-truck__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(135deg, #2563eb, #60a5fa);
+  box-shadow: 0 0 32px rgba(37, 99, 235, 0.42);
+}
+
+.vehicle-tracking-truck__info {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(226, 232, 240, 0.76);
+}
+
+.vehicle-tracking-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vehicle-tracking-mini-grid > div {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.vehicle-tracking-mini-grid span {
+  color: rgba(226, 232, 240, 0.62);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vehicle-tracking-map {
+  position: relative;
+  min-height: 300px;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background:
+    radial-gradient(circle at 16% 18%, rgba(59, 130, 246, 0.16), transparent 22%),
+    radial-gradient(circle at 82% 74%, rgba(16, 185, 129, 0.14), transparent 22%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.03),
+      rgba(255, 255, 255, 0.03) 28px,
+      rgba(255, 255, 255, 0.01) 28px,
+      rgba(255, 255, 255, 0.01) 56px
+    );
+}
+
+.vehicle-tracking-map__grid,
+.vehicle-tracking-map__route,
+.vehicle-tracking-map__marker {
+  position: absolute;
+}
+
+.vehicle-tracking-map__grid {
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 0 18%, rgba(255, 255, 255, 0.03) 18% 18.5%, transparent 18.5% 100%),
+    linear-gradient(180deg, transparent 0 32%, rgba(255, 255, 255, 0.03) 32% 32.5%, transparent 32.5% 100%);
+}
+
+.vehicle-tracking-map__route {
+  left: 18%;
+  top: 18%;
+  width: 56%;
+  height: 58%;
+  border-left: 3px solid rgba(96, 165, 250, 0.75);
+  border-bottom: 3px solid rgba(96, 165, 250, 0.75);
+  border-radius: 0 0 0 34px;
+  filter: drop-shadow(0 0 10px rgba(37, 99, 235, 0.45));
+}
+
+.vehicle-tracking-map__marker {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #60a5fa;
+  box-shadow: 0 0 0 10px rgba(96, 165, 250, 0.12), 0 0 24px rgba(96, 165, 250, 0.55);
+}
+
+.vehicle-tracking-map__marker--1 {
+  left: 18%;
+  top: 18%;
+}
+
+.vehicle-tracking-map__marker--2 {
+  left: 34%;
+  top: 36%;
+}
+
+.vehicle-tracking-map__marker--3 {
+  left: 56%;
+  top: 54%;
+}
+
+.vehicle-tracking-map__marker--4 {
+  left: 74%;
+  top: 70%;
+}
+
+.vehicle-tracking-route-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vehicle-tracking-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vehicle-tracking-report-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.vehicle-tracking-report-card__thumb {
+  display: block;
+  min-height: 72px;
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.28), rgba(16, 185, 129, 0.12)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+}
+
+.vehicle-card--tracking {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.2), transparent 28%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(11, 17, 32, 0.98));
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.22);
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.vehicle-card--tracking:hover,
+.vehicle-card--tracking:focus-visible,
+.vehicle-card--tracking-selected {
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.4);
+  box-shadow: 0 22px 42px rgba(37, 99, 235, 0.18);
+}
+
+.vehicle-card--tracking .muted {
+  color: rgba(226, 232, 240, 0.66);
+}
+
+.vehicle-card--tracking .badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+}
+
+.vehicle-card--tracking .link-button {
+  color: #93c5fd;
+}
+
+.vehicle-card__tracking-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.vehicle-card__tracking-eyebrow {
+  display: block;
+  color: rgba(226, 232, 240, 0.54);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.vehicle-card__tracking-header h3 {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+}
+
+.vehicle-card__tracking-visual {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.vehicle-card__tracking-truck {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 62px;
+}
+
+.vehicle-card__tracking-cab {
+  width: 30%;
+  height: 42px;
+  border-radius: 14px 8px 8px 14px;
+  background: linear-gradient(135deg, #dbeafe, #94a3b8);
+}
+
+.vehicle-card__tracking-trailer {
+  position: relative;
+  flex: 1;
+  height: 50px;
+  border-radius: 8px 14px 14px 8px;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.38), rgba(15, 23, 42, 0.58));
+  overflow: hidden;
+}
+
+.vehicle-card__tracking-progress {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(135deg, #2563eb, #22c55e);
+  opacity: 0.95;
+}
+
+.vehicle-card__tracking-wheel {
+  position: absolute;
+  bottom: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #020617;
+  border: 3px solid rgba(226, 232, 240, 0.16);
+}
+
+.vehicle-card__tracking-wheel--front {
+  left: 18%;
+}
+
+.vehicle-card__tracking-wheel--rear {
+  right: 12%;
+}
+
+.vehicle-card__tracking-visual-copy strong,
+.vehicle-card__tracking-footer,
+.vehicle-card__tracking-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vehicle-card__tracking-footer {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.vehicle-card__tracking-meta .badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+}
+
 .charts-grid {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
@@ -780,12 +1365,18 @@ input {
   .hero-panel,
   .detail-grid,
   .profile-grid,
-  .login-card {
+  .login-card,
+  .vehicle-tracking-shell,
+  .vehicle-tracking-detail-grid {
     grid-template-columns: 1fr;
   }
 
   .sidebar {
     order: 2;
+  }
+
+  .vehicle-tracking-list {
+    max-height: none;
   }
 }
 
@@ -813,8 +1404,30 @@ input {
     width: 100%;
   }
 
-  .page-header {
+  .page-header,
+  .vehicle-tracking-hero,
+  .vehicle-tracking-search,
+  .vehicle-tracking-panel__header {
     flex-direction: column;
+  }
+
+  .vehicle-tracking-stats,
+  .vehicle-tracking-mini-grid,
+  .vehicle-tracking-report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vehicle-tracking-hero__actions {
+    width: 100%;
+  }
+
+  .vehicle-tracking-tabs,
+  .vehicle-tracking-route-meta {
+    width: 100%;
+  }
+
+  .vehicle-tracking-shell {
+    padding: 14px;
   }
 }
 
@@ -1279,6 +1892,12 @@ body {
   gap: 16px;
 }
 
+.dashboard-subdashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .dashboard-content-grid {
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
 }
@@ -1294,6 +1913,11 @@ body {
   border-radius: 22px;
 }
 
+.dashboard-subdashboard-panel {
+  display: grid;
+  gap: 14px;
+}
+
 .dashboard-card-header {
   display: flex;
   align-items: flex-start;
@@ -1305,6 +1929,77 @@ body {
 .dashboard-card-header h3,
 .dashboard-panel h3 {
   margin: 4px 0 0;
+}
+
+.dashboard-subdashboard-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dashboard-data-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-data-grid__header,
+.dashboard-data-grid__row {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard-data-grid--drivers .dashboard-data-grid__header,
+.dashboard-data-grid--drivers .dashboard-data-grid__row {
+  grid-template-columns: minmax(0, 1.25fr) minmax(120px, 0.7fr) minmax(0, 1.1fr) minmax(84px, 0.5fr) minmax(92px, 0.6fr);
+}
+
+.dashboard-data-grid--maintenance .dashboard-data-grid__header,
+.dashboard-data-grid--maintenance .dashboard-data-grid__row {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.05fr) minmax(96px, 0.7fr) minmax(92px, 0.55fr) minmax(84px, 0.55fr);
+}
+
+.dashboard-data-grid--routes .dashboard-data-grid__header,
+.dashboard-data-grid--routes .dashboard-data-grid__row {
+  grid-template-columns: minmax(0, 1.35fr) minmax(110px, 0.7fr) minmax(100px, 0.6fr) minmax(96px, 0.55fr) minmax(88px, 0.5fr);
+}
+
+.dashboard-data-grid__header {
+  padding: 0 8px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.dashboard-data-grid__row {
+  padding: 12px 10px;
+  border-radius: 16px;
+  background: #f8fbff;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.dashboard-data-grid__cell {
+  min-width: 0;
+}
+
+.dashboard-data-grid__cell strong {
+  display: block;
+  font-size: 0.94rem;
+}
+
+.dashboard-data-grid__cell .muted {
+  margin-top: 4px;
+}
+
+.dashboard-data-grid__empty {
+  padding: 16px;
+  border-radius: 16px;
+  background: #f8fbff;
+  border: 1px dashed rgba(148, 163, 184, 0.32);
+  color: var(--color-muted);
+  font-size: 0.9rem;
 }
 
 .dashboard-chip {
@@ -1451,7 +2146,8 @@ body {
 @media (max-width: 1100px) {
   .app-shell__body,
   .dashboard-content-grid,
-  .dashboard-lower-grid {
+  .dashboard-lower-grid,
+  .dashboard-subdashboard-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1476,6 +2172,15 @@ body {
 
   .dashboard-live-grid,
   .dashboard-permission-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-data-grid--drivers .dashboard-data-grid__header,
+  .dashboard-data-grid--drivers .dashboard-data-grid__row,
+  .dashboard-data-grid--maintenance .dashboard-data-grid__header,
+  .dashboard-data-grid--maintenance .dashboard-data-grid__row,
+  .dashboard-data-grid--routes .dashboard-data-grid__header,
+  .dashboard-data-grid--routes .dashboard-data-grid__row {
     grid-template-columns: 1fr;
   }
 

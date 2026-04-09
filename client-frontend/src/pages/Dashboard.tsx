@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { VehicleCard } from '../components/VehicleCard'
 import { fetchDrivers, fetchMaintenanceAlerts, fetchRoutePlans, fetchVehicles } from '../services/apiService'
@@ -62,6 +62,30 @@ function formatTelemetryNumericInput(value: string, options?: { maxValue?: numbe
 
 function toneClassName(tone: Tone) {
   return `tone-${tone}`
+}
+
+function driverStatusClass(status: Driver['status']) {
+  if (status === 'On Duty') {
+    return 'dashboard-chip dashboard-chip--success'
+  }
+
+  if (status === 'Resting') {
+    return 'dashboard-chip dashboard-chip--warn'
+  }
+
+  return 'dashboard-chip'
+}
+
+function routeStatusClass(status: RoutePlan['status']) {
+  if (status === 'In Progress') {
+    return 'dashboard-chip dashboard-chip--success'
+  }
+
+  if (status === 'Scheduled') {
+    return 'dashboard-chip dashboard-chip--warn'
+  }
+
+  return 'dashboard-chip'
 }
 
 function SectionHeader({
@@ -201,6 +225,85 @@ function HealthItem({
   )
 }
 
+function DataGrid({
+  columns,
+  rows,
+  variant,
+  emptyMessage,
+}: {
+  columns: string[]
+  rows: Array<{ key: string; cells: ReactNode[] }>
+  variant: 'drivers' | 'maintenance' | 'routes'
+  emptyMessage: string
+}) {
+  return (
+    <div className={`dashboard-data-grid dashboard-data-grid--${variant}`}>
+      <div className="dashboard-data-grid__header">
+        {columns.map((column) => (
+          <span key={column}>{column}</span>
+        ))}
+      </div>
+      {rows.length ? (
+        rows.map((row) => (
+          <div key={row.key} className="dashboard-data-grid__row">
+            {row.cells.map((cell, index) => (
+              <div key={`${row.key}-${index}`} className="dashboard-data-grid__cell">
+                {cell}
+              </div>
+            ))}
+          </div>
+        ))
+      ) : (
+        <div className="dashboard-data-grid__empty">{emptyMessage}</div>
+      )}
+    </div>
+  )
+}
+
+function SubDashboardPanel({
+  eyebrow,
+  title,
+  meta,
+  link,
+  summary,
+  columns,
+  rows,
+  variant,
+  emptyMessage,
+}: {
+  eyebrow: string
+  title: string
+  meta: string
+  link: string
+  summary: Array<{ label: string; value: string }>
+  columns: string[]
+  rows: Array<{ key: string; cells: ReactNode[] }>
+  variant: 'drivers' | 'maintenance' | 'routes'
+  emptyMessage: string
+}) {
+  return (
+    <article className="dashboard-panel dashboard-subdashboard-panel">
+      <div className="dashboard-card-header">
+        <div>
+          <span className="dashboard-card-header__eyebrow">{eyebrow}</span>
+          <h3>{title}</h3>
+        </div>
+        <Link className="dashboard-card-header__link" to={link}>
+          {meta}
+        </Link>
+      </div>
+      <div className="dashboard-subdashboard-summary">
+        {summary.map((item) => (
+          <span key={item.label} className="dashboard-chip">
+            {item.label}: {item.value}
+          </span>
+        ))}
+      </div>
+      <DataGrid columns={columns} emptyMessage={emptyMessage} rows={rows} variant={variant} />
+    </article>
+  )
+}
+
 export function Dashboard() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [drivers, setDrivers] = useState<Driver[]>([])
@@ -255,6 +358,89 @@ export function Dashboard() {
   const utilization = vehicles.length ? Math.round((activeVehicles / vehicles.length) * 100) : 0
   const fleetIssues = criticalAlerts + overdueAlerts + lowFuelVehicles
   const lastTelemetryLabel = telemetry.at(-1)?.timestamp ?? 'N/A'
+  const vehicleLookup = useMemo(
+    () => new Map(vehicles.map((vehicle) => [vehicle.id, vehicle])),
+    [vehicles],
+  )
+
+  const orderedDrivers = useMemo(
+    () =>
+      [...drivers].sort((left, right) => {
+        const statusRank = (status: Driver['status']) => {
+          if (status === 'On Duty') return 0
+          if (status === 'Resting') return 1
+          return 2
+        }
+
+        return statusRank(left.status) - statusRank(right.status) || left.name.localeCompare(right.name)
+      }),
+    [drivers],
+  )
+
+  const orderedRoutes = useMemo(
+    () =>
+      [...routes].sort((left, right) => {
+        const routeStatusRank = (status: RoutePlan['status']) => {
+          if (status === 'In Progress') return 0
+          if (status === 'Scheduled') return 1
+          return 2
+        }
+
+        return routeStatusRank(left.status) - routeStatusRank(right.status) || left.distanceKm - right.distanceKm
+      }),
+    [routes],
+  )
+
+  const driverRows = useMemo(
+    () =>
+      orderedDrivers.slice(0, 4).map((driver) => {
+        const vehicle = vehicleLookup.get(driver.assignedVehicleId ?? '')
+
+        return {
+          key: driver.id,
+          cells: [
+            <div key={`${driver.id}-name`}>
+              <strong>{driver.name}</strong>
+              <p className="muted">{driver.id}</p>
+            </div>,
+            <span key={`${driver.id}-status`} className={driverStatusClass(driver.status)}>
+              {driver.status}
+            </span>,
+            <div key={`${driver.id}-vehicle`}>
+              <strong>{vehicle?.name ?? 'Unassigned'}</strong>
+              <p className="muted">{vehicle?.id ?? 'No vehicle linked'}</p>
+            </div>,
+            <span key={`${driver.id}-hours`}>{driver.hoursDrivenToday.toFixed(1)} h</span>,
+            <span key={`${driver.id}-license`} className="dashboard-chip">
+              {driver.licenseType}
+            </span>,
+          ],
+        }
+      }),
+    [orderedDrivers, vehicleLookup],
+  )
+
+  const routeRows = useMemo(
+    () =>
+      orderedRoutes.slice(0, 4).map((route) => ({
+        key: route.id,
+        cells: [
+          <div key={`${route.id}-name`}>
+            <strong>{route.name}</strong>
+            <p className="muted">{route.id}</p>
+          </div>,
+          <span key={`${route.id}-status`} className={routeStatusClass(route.status)}>
+            {route.status}
+          </span>,
+          <span key={`${route.id}-distance`}>{route.distanceKm.toLocaleString('en-IN')} km</span>,
+          <span key={`${route.id}-duration`}>{route.estimatedDuration}</span>,
+          <span key={`${route.id}-stops`} className="dashboard-chip">
+            {route.stops.length} stops
+          </span>,
+        ],
+      })),
+    [orderedRoutes],
+  )
 
   const speedSeries = useMemo(
     () => (telemetry.length ? telemetry.map((point) => ({ label: point.timestamp, value: point.speed })) : fallbackTelemetrySeries),
@@ -373,7 +559,7 @@ export function Dashboard() {
         </div>
         <div className="dashboard-summary-grid">
           {[
-            { label: 'Active vehicles', value: String(activeVehicles), note: `${idleVehicles} idle · ${serviceVehicles} in maintenance`, tone: 'blue' },
+            { label: 'Active vehicles', value: String(activeVehicles), note: `${idleVehicles} at rest · ${serviceVehicles} in maintenance`, tone: 'blue' },
             { label: 'Dispatch cycle', value: inProgressRoutes ? 'IN PROGRESS' : 'SCHEDULED', note: `${routes.length} routes planned · ${completedRoutes} completed`, tone: 'mint' },
             { label: 'Pending approvals', value: String(criticalAlerts + scheduledRoutes), note: `${criticalAlerts} critical · ${overdueAlerts} overdue`, tone: 'amber' },
             { label: 'Driver duty', value: `${utilization}%`, note: `${driversOnDuty} on duty · ${drivers.length - driversOnDuty} off shift`, tone: 'violet' },
@@ -419,6 +605,48 @@ export function Dashboard() {
               </div>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="dashboard-section">
+        <div className="dashboard-section__header">
+          <div>
+            <span className="dashboard-section__eyebrow">Sub dashboards</span>
+            <h2 className="dashboard-section__title">Drivers and routes</h2>
+          </div>
+          <span className="dashboard-section__counter">{drivers.length + routes.length} records</span>
+        </div>
+        <div className="dashboard-subdashboard-grid">
+          <SubDashboardPanel
+            columns={['Driver', 'Status', 'Vehicle', 'Hours', 'License']}
+            emptyMessage="No driver records available."
+            eyebrow="Crew board"
+            link="/drivers"
+            meta="View drivers"
+            rows={driverRows}
+            summary={[
+              { label: 'Total', value: String(drivers.length) },
+              { label: 'On duty', value: String(driversOnDuty) },
+              { label: 'Resting', value: String(drivers.filter((driver) => driver.status === 'Resting').length) },
+            ]}
+            variant="drivers"
+            title="Drivers"
+          />
+          <SubDashboardPanel
+            columns={['Route', 'Status', 'Distance', 'Duration', 'Stops']}
+            emptyMessage="No route plans available."
+            eyebrow="Dispatch board"
+            link="/routes"
+            meta="View routes"
+            rows={routeRows}
+            summary={[
+              { label: 'Total', value: String(routes.length) },
+              { label: 'Live', value: String(inProgressRoutes) },
+              { label: 'Scheduled', value: String(scheduledRoutes) },
+            ]}
+            variant="routes"
+            title="Routes"
+          />
         </div>
       </section>
 

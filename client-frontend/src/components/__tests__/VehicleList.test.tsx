@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { VehicleList } from '../../pages/VehicleList'
 
@@ -43,7 +43,7 @@ describe('VehicleList', () => {
     deleteVehicleMock.mockReset()
   })
 
-  it('deletes a vehicle without using the browser confirm dialog', async () => {
+  it('deletes a vehicle from the tracking detail panel without using the browser confirm dialog', async () => {
     let resolveDelete: (() => void) | undefined
     deleteVehicleMock.mockImplementation(
       () =>
@@ -63,21 +63,24 @@ describe('VehicleList', () => {
       </MemoryRouter>,
     )
 
-    const urbanSprintHeading = await screen.findByRole('heading', { name: /urban sprint/i })
-    const urbanSprintCard = urbanSprintHeading.closest('article')
+    const urbanSprintCard = await screen.findByText(/urban sprint/i)
+    const urbanSprintButton = urbanSprintCard.closest('[role="button"]')
 
-    expect(urbanSprintCard).not.toBeNull()
+    expect(urbanSprintButton).not.toBeNull()
 
-    fireEvent.click(within(urbanSprintCard as HTMLElement).getByRole('button', { name: /^delete$/i }))
+    fireEvent.click(urbanSprintButton as HTMLElement)
+
+    const detailDeleteButton = await screen.findByRole('button', { name: /^delete$/i })
+    fireEvent.click(detailDeleteButton)
 
     expect(deleteVehicleMock).toHaveBeenCalledWith('VH-104')
     expect(confirmSpy).not.toHaveBeenCalled()
-    expect(within(urbanSprintCard as HTMLElement).getByRole('button', { name: /deleting/i })).toBeDisabled()
+    expect(detailDeleteButton).toBeDisabled()
 
     resolveDelete?.()
 
     await waitFor(() => {
-      expect(screen.queryByRole('heading', { name: /urban sprint/i })).not.toBeInTheDocument()
+      expect(screen.queryByText(/urban sprint/i)).not.toBeInTheDocument()
     })
 
     confirmSpy.mockRestore()
@@ -93,7 +96,7 @@ describe('VehicleList', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /add vehicle/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /create vehicle/i }))
 
     const fuelLevelInput = screen.getByLabelText(/fuel level \(%\)/i)
     const mileageInput = screen.getByLabelText(/mileage/i)
@@ -115,5 +118,21 @@ describe('VehicleList', () => {
 
     fireEvent.change(mileageInput, { target: { value: '010' } })
     expect(mileageInput).toHaveDisplayValue('10')
+  })
+
+  it('renders the tracking layout with the selected vehicle board', async () => {
+    render(
+      <MemoryRouter
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+        initialEntries={['/vehicles']}
+      >
+        <VehicleList />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: /tracking/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /atlas prime/i, level: 1 })).toBeInTheDocument()
+    expect(screen.getByText(/current truck capacity/i)).toBeInTheDocument()
+    expect(screen.getByText(/cargo photo reports/i)).toBeInTheDocument()
   })
 })

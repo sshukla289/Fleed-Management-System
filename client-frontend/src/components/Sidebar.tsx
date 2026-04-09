@@ -12,7 +12,6 @@ const groups = [
       { label: 'Vehicles', path: '/vehicles', icon: '02' },
       { label: 'Drivers', path: '/drivers', icon: '03' },
       { label: 'Routes', path: '/routes', icon: '04' },
-      { label: 'Maintenance', path: '/maintenance', icon: '05' },
     ],
   },
   {

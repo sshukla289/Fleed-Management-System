@@ -60,4 +60,17 @@ describe('Dashboard', () => {
     fireEvent.change(fuelLevelInput, { target: { value: '150' } })
     expect(fuelLevelInput).toHaveDisplayValue('100')
   })
+
+  it('renders the drivers and routes sub dashboards', async () => {
+    render(
+      <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+        <Dashboard />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: /^drivers$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^routes$/i })).toBeInTheDocument()
+    expect(screen.getByText('DR-201')).toBeInTheDocument()
+    expect(screen.getByText('RT-501')).toBeInTheDocument()
+  })
 })
