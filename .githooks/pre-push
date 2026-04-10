@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+set -eu
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+echo "[pre-push] Running frontend CI parity checks..."
+
+if [ ! -d "$REPO_ROOT/client-frontend" ]; then
+  echo "[pre-push] client-frontend directory not found. Aborting push."
+  exit 1
+fi
+
+cd "$REPO_ROOT/client-frontend"
+
+if [ ! -d "node_modules" ]; then
+  echo "[pre-push] node_modules missing. Installing dependencies with npm ci..."
+  npm ci
+fi
+
+npm run lint
+npm test
+npm run build
+
+echo "[pre-push] All frontend checks passed."

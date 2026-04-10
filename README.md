@@ -2,6 +2,20 @@
 
 Production-oriented fleet operations platform built around the trip lifecycle.
 
+## Local git safety setup
+
+To prevent pushes that would fail Frontend CI, enable the tracked pre-push hook once per clone:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-git-hooks.ps1
+```
+
+This hook runs the same frontend checks used in GitHub Actions:
+
+- `npm run lint`
+- `npm test`
+- `npm run build`
+
 ## Lifecycle
 
 The system is designed around a single operational spine:
