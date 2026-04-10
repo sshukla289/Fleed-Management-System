@@ -33,6 +33,7 @@ import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,6 +43,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 public class DataSeeder {
 
     @Bean
+    @ConditionalOnProperty(value = "app.seed.enabled", havingValue = "true")
     CommandLineRunner seedFleetData(
         VehicleRepository vehicleRepository,
         DriverRepository driverRepository,

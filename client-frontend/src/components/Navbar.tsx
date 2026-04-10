@@ -49,12 +49,28 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   },
 }
 
+const dynamicTitleMatchers: Array<{
+  prefix: string
+  title: { title: string; subtitle: string }
+}> = [
+  { prefix: '/vehicles/', title: titles['/vehicles'] },
+]
+
+function resolveTitle(pathname: string) {
+  const staticTitle = titles[pathname]
+  if (staticTitle) {
+    return staticTitle
+  }
+
+  return dynamicTitleMatchers.find((matcher) => pathname.startsWith(matcher.prefix))?.title ?? titles['/dashboard']
+}
+
 export function Navbar() {
   const { session } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
 
-  const title = useMemo(() => titles[pathname] ?? titles['/dashboard'], [pathname])
+  const title = useMemo(() => resolveTitle(pathname), [pathname])
 
   return (
     <header className="navbar">

@@ -463,6 +463,19 @@ export interface AuthSession {
   profile: UserProfile
 }
 
+export interface AdminUser {
+  id: string
+  name: string
+  role: AppRole
+  email: string
+  loginEmail: string
+  assignedRegion: string
+}
+
+export interface UpdateUserRoleInput {
+  role: AppRole
+}
+
 export interface LoginCredentials {
   email: string
   password: string
@@ -508,7 +521,6 @@ export interface AssignShiftInput {
 
 export interface UpdateProfileInput {
   name: string
-  role: string
   email: string
   assignedRegion: string
 }

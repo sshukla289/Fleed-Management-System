@@ -23,7 +23,6 @@ export function Profile() {
   const [passwordSuccess, setPasswordSuccess] = useState('')
   const [form, setForm] = useState<UpdateProfileInput>({
     name: '',
-    role: '',
     email: '',
     assignedRegion: '',
   })
@@ -46,7 +45,6 @@ export function Profile() {
       }
       setForm({
         name: profileData.name,
-        role: profileData.role,
         email: profileData.email,
         assignedRegion: profileData.assignedRegion,
       })

@@ -1,5 +1,6 @@
 import { AUTH_STORAGE_KEY } from '../context/auth-context'
 import type {
+  AdminUser,
   AssignShiftInput,
   AuditLogEntry,
   AuthSession,
@@ -29,6 +30,7 @@ import type {
   TripStatus,
   TripTelemetryPoint,
   TripValidationResult,
+  UpdateUserRoleInput,
   UpdateDriverInput,
   UpdateMaintenanceAlertInput,
   UpdateProfileInput,
@@ -226,6 +228,17 @@ export function fetchCurrentUser(): Promise<UserProfile> {
 
 export function logoutRequest(): Promise<void> {
   return request<void>('/auth/logout', { method: 'POST' })
+}
+
+export function fetchAdminUsers(): Promise<AdminUser[]> {
+  return request<AdminUser[]>('/admin/users')
+}
+
+export function updateUserRole(id: string, input: UpdateUserRoleInput): Promise<AdminUser> {
+  return request<AdminUser>(`/admin/users/${id}/roles`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
 }
 
 export function fetchVehicles(): Promise<Vehicle[]> {

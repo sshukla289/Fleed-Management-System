@@ -115,6 +115,10 @@ public class TripDispatchService {
         if (trip.getStatus() == TripStatus.COMPLETED || trip.getStatus() == TripStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Completed trips cannot be dispatched again.");
         }
+
+        if (trip.getStatus() == TripStatus.DISPATCHED || trip.getStatus() == TripStatus.IN_PROGRESS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip has already entered dispatch execution flow.");
+        }
     }
 
     private void ensureAssignmentsPresent(Trip trip) {

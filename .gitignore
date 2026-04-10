@@ -13,5 +13,6 @@ client-frontend/*.tsbuildinfo
 
 # General logs and OS files
 *.log
+*.err
 .DS_Store
 Thumbs.db

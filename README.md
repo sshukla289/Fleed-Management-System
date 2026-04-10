@@ -2,6 +2,11 @@
 
 Production-oriented fleet operations platform built around the trip lifecycle.
 
+## Runtime defaults
+
+- `APP_SEED_ENABLED=false` by default to avoid seeding demo users/data in production-oriented environments.
+- Set `APP_SEED_ENABLED=true` only for local bootstrap or demo environments.
+
 ## Local git safety setup
 
 To prevent pushes that would fail Frontend CI, enable the tracked pre-push hook once per clone:

@@ -69,8 +69,8 @@ public class TripPostProcessingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Completion details are required.");
         }
 
-        if (trip.getStatus() != TripStatus.IN_PROGRESS && trip.getStatus() != TripStatus.DISPATCHED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip must be active before it can be completed.");
+        if (trip.getStatus() != TripStatus.IN_PROGRESS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip must be in progress before it can be completed.");
         }
 
         if (trip.getAssignedVehicleId() == null || trip.getAssignedVehicleId().isBlank()) {

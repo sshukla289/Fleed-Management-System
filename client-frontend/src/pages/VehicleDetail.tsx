@@ -12,15 +12,23 @@ export function VehicleDetail() {
   const navigate = useNavigate()
   const [vehicle, setVehicle] = useState<Vehicle | undefined>()
   const [telemetry, setTelemetry] = useState<TelemetryData[]>([])
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadVehicleDetail() {
-      const vehicleData = await fetchVehicleById(id)
-      setVehicle(vehicleData)
+      setError(null)
 
-      if (vehicleData) {
-        const telemetryData = await fetchVehicleTelemetry(vehicleData.id)
-        setTelemetry(telemetryData)
+      try {
+        const vehicleData = await fetchVehicleById(id)
+        setVehicle(vehicleData)
+
+        if (vehicleData) {
+          const telemetryData = await fetchVehicleTelemetry(vehicleData.id)
+          setTelemetry(telemetryData)
+        }
+      } catch (loadError) {
+        setTelemetry([])
+        setError(loadError instanceof Error ? loadError.message : 'Unable to load vehicle detail telemetry.')
       }
     }
 
@@ -53,6 +61,7 @@ export function VehicleDetail() {
       />
       <section className="detail-grid">
         <div className="detail-section">
+          {error ? <div className="notice">{error}</div> : null}
           <div className="panel">
             <div className="detail-section__header">
               <div>

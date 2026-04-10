@@ -247,6 +247,11 @@ export function Trips() {
   const role = session?.profile.role
   const canPlanTrips = canManageTrips(role)
   const canExecuteTrips = canOperateTripExecution(role)
+  const canValidateSelectedTrip = selectedTrip ? ['DRAFT', 'BLOCKED'].includes(selectedTrip.status) : false
+  const canOptimizeSelectedTrip = selectedTrip ? ['DRAFT', 'VALIDATED', 'BLOCKED'].includes(selectedTrip.status) : false
+  const canDispatchSelectedTrip = selectedTrip ? ['DRAFT', 'VALIDATED', 'OPTIMIZED', 'BLOCKED'].includes(selectedTrip.status) : false
+  const canStartSelectedTrip = selectedTrip?.status === 'DISPATCHED'
+  const canCompleteSelectedTrip = selectedTrip?.status === 'IN_PROGRESS'
 
   return (
     <div className="page-shell">
@@ -575,16 +580,16 @@ export function Trips() {
             </div>
 
             <div className="trip-detail__actions">
-              <button className="secondary-button" disabled={working || !canPlanTrips} onClick={() => void handleTripAction(() => validateTrip(selectedTrip.tripId), 'Trip validated.') } type="button">
+              <button className="secondary-button" disabled={working || !canPlanTrips || !canValidateSelectedTrip} onClick={() => void handleTripAction(() => validateTrip(selectedTrip.tripId), 'Trip validated.') } type="button">
                 Validate
               </button>
-              <button className="secondary-button" disabled={working || !canPlanTrips} onClick={() => void handleTripAction(() => optimizeTrip(selectedTrip.tripId), 'Trip optimized.') } type="button">
+              <button className="secondary-button" disabled={working || !canPlanTrips || !canOptimizeSelectedTrip} onClick={() => void handleTripAction(() => optimizeTrip(selectedTrip.tripId), 'Trip optimized.') } type="button">
                 Optimize
               </button>
-              <button className="secondary-button" disabled={working || !canPlanTrips} onClick={() => void handleTripAction(() => dispatchTrip(selectedTrip.tripId), 'Trip dispatched.') } type="button">
+              <button className="secondary-button" disabled={working || !canPlanTrips || !canDispatchSelectedTrip} onClick={() => void handleTripAction(() => dispatchTrip(selectedTrip.tripId), 'Trip dispatched.') } type="button">
                 Dispatch
               </button>
-              <button className="secondary-button" disabled={working || !canExecuteTrips} onClick={() => void handleTripAction(() => startTrip(selectedTrip.tripId), 'Trip started.') } type="button">
+              <button className="secondary-button" disabled={working || !canExecuteTrips || !canStartSelectedTrip} onClick={() => void handleTripAction(() => startTrip(selectedTrip.tripId), 'Trip started.') } type="button">
                 Start
               </button>
             </div>
@@ -656,10 +661,13 @@ export function Trips() {
                   />
                 </label>
               </div>
-              <button className="primary-button" disabled={working} type="submit">
-                Complete trip
+              <button className="primary-button" disabled={working || !canCompleteSelectedTrip} type="submit">
+                {canCompleteSelectedTrip ? 'Complete trip' : 'Trip must be in progress to complete'}
               </button>
             </form>
+            ) : null}
+            {canExecuteTrips && !canCompleteSelectedTrip ? (
+              <div className="muted">Completion is enabled only after the trip is started.</div>
             ) : null}
           </section>
         </div>

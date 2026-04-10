@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type PropsWithChildren } from 'react'
+import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from 'react'
 import { fetchCurrentUser, login as loginRequest, logoutRequest } from '../services/apiService'
 import type { AuthSession, LoginCredentials, UserProfile } from '../types'
 import { AUTH_STORAGE_KEY, AuthContext, type AuthContextValue } from './auth-context'
@@ -68,7 +68,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [])
 
-  async function login(credentials: LoginCredentials) {
+  const login = useCallback(async (credentials: LoginCredentials) => {
     setIsLoadingSession(true)
     try {
       const nextSession = await loginRequest(credentials)
@@ -88,9 +88,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } finally {
       setIsLoadingSession(false)
     }
-  }
+  }, [])
 
-  async function logout() {
+  const logout = useCallback(async () => {
     try {
       if (session?.token) {
         await logoutRequest()
@@ -99,9 +99,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(null)
       window.localStorage.removeItem(AUTH_STORAGE_KEY)
     }
-  }
+  }, [session?.token])
 
-  function updateSessionProfile(profile: UserProfile) {
+  const updateSessionProfile = useCallback((profile: UserProfile) => {
     setSession((current) => {
       if (!current) {
         return current
@@ -114,7 +114,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextSession))
       return nextSession
     })
-  }
+  }, [])
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -125,7 +125,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       logout,
       updateSessionProfile,
     }),
-    [isLoadingSession, session],
+    [isLoadingSession, login, logout, session, updateSessionProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

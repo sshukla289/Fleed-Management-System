@@ -6,8 +6,8 @@ import { useAuth } from '../context/useAuth'
 export function Login() {
   const navigate = useNavigate()
   const { login } = useAuth()
-  const [email, setEmail] = useState('manager@fleetcontrol.dev')
-  const [password, setPassword] = useState('password123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -58,9 +58,11 @@ export function Login() {
               value={password}
             />
           </label>
-          <div className="login-hint">
-            Default seeded account: <strong>manager@fleetcontrol.dev</strong> / <strong>password123</strong>
-          </div>
+          {import.meta.env.DEV ? (
+            <div className="login-hint">
+              Dev seeded account: <strong>manager@fleetcontrol.dev</strong> / <strong>password123</strong>
+            </div>
+          ) : null}
           {error ? <div className="form-error">{error}</div> : null}
           <button className="primary-button" disabled={isSubmitting} type="submit">
             {isSubmitting ? 'Signing in...' : 'Sign in'}

@@ -1,8 +1,12 @@
 package com.fleet.modules.notification.service;
 
 import com.fleet.modules.alert.entity.Alert;
+import com.fleet.modules.auth.entity.AppRole;
+import com.fleet.modules.auth.entity.AppUser;
 import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.audit.service.AuditLogService;
+import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.maintenance.entity.MaintenanceSchedule;
 import com.fleet.modules.notification.dto.NotificationDTO;
 import com.fleet.modules.notification.entity.Notification;
@@ -10,6 +14,8 @@ import com.fleet.modules.notification.entity.NotificationCategory;
 import com.fleet.modules.notification.entity.NotificationSeverity;
 import com.fleet.modules.notification.repository.NotificationRepository;
 import com.fleet.modules.trip.entity.Trip;
+import com.fleet.modules.trip.entity.TripStatus;
+import com.fleet.modules.trip.repository.TripRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -22,22 +28,37 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class NotificationService {
 
+    private static final List<TripStatus> DRIVER_ACTIVE_STATUSES = List.of(
+        TripStatus.DRAFT,
+        TripStatus.VALIDATED,
+        TripStatus.OPTIMIZED,
+        TripStatus.DISPATCHED,
+        TripStatus.IN_PROGRESS
+    );
+
     private final NotificationRepository notificationRepository;
     private final AuditLogService auditLogService;
     private final CurrentUserService currentUserService;
+    private final TripRepository tripRepository;
+    private final DriverRepository driverRepository;
 
     public NotificationService(
         NotificationRepository notificationRepository,
         AuditLogService auditLogService,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        TripRepository tripRepository,
+        DriverRepository driverRepository
     ) {
         this.notificationRepository = notificationRepository;
         this.auditLogService = auditLogService;
         this.currentUserService = currentUserService;
+        this.tripRepository = tripRepository;
+        this.driverRepository = driverRepository;
     }
 
     public List<NotificationDTO> getNotifications() {
         return notificationRepository.findAllByOrderByCreatedAtDesc().stream()
+            .filter(this::isVisibleToCurrentUser)
             .map(this::toDto)
             .toList();
     }
@@ -46,6 +67,7 @@ public class NotificationService {
     public NotificationDTO markRead(String id) {
         Notification notification = notificationRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found."));
+        ensureVisibleToCurrentUser(notification);
 
         if (notification.getReadAt() == null) {
             notification.setReadAt(LocalDateTime.now());
@@ -64,6 +86,53 @@ public class NotificationService {
         }
 
         return toDto(notification);
+    }
+
+    private void ensureVisibleToCurrentUser(Notification notification) {
+        if (!isVisibleToCurrentUser(notification)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Notification access is restricted for the current user.");
+        }
+    }
+
+    private boolean isVisibleToCurrentUser(Notification notification) {
+        if (notification == null) {
+            return false;
+        }
+
+        if (currentUserService.getCurrentRole() != AppRole.DRIVER) {
+            return true;
+        }
+
+        AppUser actor = currentUserService.getRequiredUser();
+        return matchesDriverTrip(actor.getId(), notification.getTripId())
+            || matchesDriverVehicle(actor.getId(), notification.getVehicleId());
+    }
+
+    private boolean matchesDriverTrip(String driverId, String tripId) {
+        if (driverId == null || driverId.isBlank() || tripId == null || tripId.isBlank()) {
+            return false;
+        }
+
+        return tripRepository.findById(tripId.trim())
+            .map(trip -> driverId.equalsIgnoreCase(String.valueOf(trip.getAssignedDriverId())))
+            .orElse(false);
+    }
+
+    private boolean matchesDriverVehicle(String driverId, String vehicleId) {
+        if (driverId == null || driverId.isBlank() || vehicleId == null || vehicleId.isBlank()) {
+            return false;
+        }
+
+        String normalizedVehicleId = vehicleId.trim();
+        Driver driver = driverRepository.findById(driverId).orElse(null);
+        if (driver != null && driver.getAssignedVehicleId() != null && normalizedVehicleId.equalsIgnoreCase(driver.getAssignedVehicleId())) {
+            return true;
+        }
+
+        return tripRepository
+            .findTopByAssignedDriverIdAndStatusInOrderByPlannedStartTimeDesc(driverId, DRIVER_ACTIVE_STATUSES)
+            .map(trip -> normalizedVehicleId.equalsIgnoreCase(String.valueOf(trip.getAssignedVehicleId())))
+            .orElse(false);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
