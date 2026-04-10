@@ -1,6 +1,7 @@
 package com.fleet.modules.notification.service;
 
 import com.fleet.modules.alert.entity.Alert;
+import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.audit.service.AuditLogService;
 import com.fleet.modules.maintenance.entity.MaintenanceSchedule;
 import com.fleet.modules.notification.dto.NotificationDTO;
@@ -23,10 +24,16 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final AuditLogService auditLogService;
+    private final CurrentUserService currentUserService;
 
-    public NotificationService(NotificationRepository notificationRepository, AuditLogService auditLogService) {
+    public NotificationService(
+        NotificationRepository notificationRepository,
+        AuditLogService auditLogService,
+        CurrentUserService currentUserService
+    ) {
         this.notificationRepository = notificationRepository;
         this.auditLogService = auditLogService;
+        this.currentUserService = currentUserService;
     }
 
     public List<NotificationDTO> getNotifications() {
@@ -44,7 +51,7 @@ public class NotificationService {
             notification.setReadAt(LocalDateTime.now());
             notificationRepository.save(notification);
             auditLogService.record(
-                "system",
+                currentUserService.getCurrentActor(),
                 "NOTIFICATION_READ",
                 "NOTIFICATION",
                 notification.getId(),

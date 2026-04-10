@@ -2,3 +2,16 @@
 
 # Backend build artifacts
 backend/target/
+
+# Frontend dependencies and build artifacts
+client-frontend/node_modules/
+client-frontend/dist/
+client-frontend/.vite/
+client-frontend/coverage/
+client-frontend/node_modules/.tmp/
+client-frontend/*.tsbuildinfo
+
+# General logs and OS files
+*.log
+.DS_Store
+Thumbs.db

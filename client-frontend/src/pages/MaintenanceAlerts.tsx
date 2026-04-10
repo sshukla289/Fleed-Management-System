@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
+import { useAuth } from '../context/useAuth'
+import { canManageMaintenance } from '../security/permissions'
 import {
   createMaintenanceAlert,
   deleteMaintenanceAlert,
@@ -27,6 +29,7 @@ function severityClass(severity: MaintenanceAlert['severity']) {
 }
 
 export function MaintenanceAlerts() {
+  const { session } = useAuth()
   const [searchParams] = useSearchParams()
   const [alerts, setAlerts] = useState<MaintenanceAlert[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -34,6 +37,7 @@ export function MaintenanceAlerts() {
   const [editingAlertId, setEditingAlertId] = useState<string | null>(null)
   const [deletingAlertId, setDeletingAlertId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const canManage = canManageMaintenance(session?.profile.role)
   const [form, setForm] = useState<CreateMaintenanceAlertInput>({
     vehicleId: searchParams.get('vehicleId') ?? '',
     title: '',
@@ -135,12 +139,16 @@ export function MaintenanceAlerts() {
         description="Monitor service priorities and plan workshop capacity using alert severity and due dates."
         actionLabel={showForm ? 'Close form' : 'Create work order'}
         onAction={() => {
+          if (!canManage) {
+            return
+          }
           if (showForm) {
             resetForm()
           } else {
             setShowForm(true)
           }
         }}
+        actionDisabled={!canManage}
       />
       {searchParams.get('vehicleId') ? (
         <div className="panel search-summary">
@@ -152,7 +160,7 @@ export function MaintenanceAlerts() {
           </div>
         </div>
       ) : null}
-      {showForm ? (
+      {showForm && canManage ? (
         <form className="panel inline-form" onSubmit={handleSubmit}>
           <div className="panel__header">
             <div>
@@ -225,8 +233,9 @@ export function MaintenanceAlerts() {
                 <button
                   className="secondary-button"
                   disabled={deletingAlertId === alert.id}
-                  onClick={() => handleEdit(alert)}
+                  onClick={() => canManage && handleEdit(alert)}
                   type="button"
+                  hidden={!canManage}
                 >
                   Edit
                 </button>
@@ -234,9 +243,10 @@ export function MaintenanceAlerts() {
                   aria-busy={deletingAlertId === alert.id}
                   aria-label={deletingAlertId === alert.id ? 'Deleting...' : 'Delete'}
                   className={`secondary-button danger-button loading-button${deletingAlertId === alert.id ? ' is-loading' : ''}`}
-                  disabled={deletingAlertId === alert.id}
-                  onClick={() => handleDelete(alert)}
+                  disabled={!canManage || deletingAlertId === alert.id}
+                  onClick={() => canManage && handleDelete(alert)}
                   type="button"
+                  hidden={!canManage}
                 >
                   <span aria-hidden="true" className="loading-button__content">
                     <span className="loading-button__label loading-button__label--default">Delete</span>

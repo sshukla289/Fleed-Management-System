@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'
+import { useAuth } from '../context/useAuth'
+import { canManageAlerts } from '../security/permissions'
 import { acknowledgeAlert, fetchAlerts, resolveAlert } from '../services/apiService'
 import type { Alert, AlertLifecycleStatus, AlertSeverity } from '../types'
 
@@ -40,12 +42,14 @@ function formatTime(value: string) {
 }
 
 export function AlertsCenter() {
+  const { session } = useAuth()
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('ALL')
   const [loading, setLoading] = useState(true)
   const [workingId, setWorkingId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const canManage = canManageAlerts(session?.profile.role)
 
   async function loadAlerts() {
     setLoading(true)
@@ -200,7 +204,7 @@ export function AlertsCenter() {
                 <div className="alert-card__actions">
                   <button
                     className="secondary-button"
-                    disabled={workingId === alert.id || alert.status === 'CLOSED' || alert.status === 'RESOLVED'}
+                    disabled={!canManage || workingId === alert.id || alert.status === 'CLOSED' || alert.status === 'RESOLVED'}
                     type="button"
                     onClick={() => void handleAlertAction(alert.id, 'acknowledge')}
                   >
@@ -208,7 +212,7 @@ export function AlertsCenter() {
                   </button>
                   <button
                     className="primary-button"
-                    disabled={workingId === alert.id || alert.status === 'CLOSED' || alert.status === 'RESOLVED'}
+                    disabled={!canManage || workingId === alert.id || alert.status === 'CLOSED' || alert.status === 'RESOLVED'}
                     type="button"
                     onClick={() => void handleAlertAction(alert.id, 'resolve')}
                   >

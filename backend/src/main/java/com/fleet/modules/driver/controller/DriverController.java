@@ -7,6 +7,7 @@ import com.fleet.modules.driver.dto.UpdateDriverRequest;
 import com.fleet.modules.driver.service.DriverService;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,26 +28,31 @@ public class DriverController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<List<DriverDTO>> getDrivers() {
         return ResponseEntity.ok(driverService.getDrivers());
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<DriverDTO> createDriver(@RequestBody CreateDriverRequest request) {
         return ResponseEntity.ok(driverService.createDriver(request));
     }
 
     @PostMapping("/assign-shift")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<DriverDTO> assignShift(@RequestBody AssignShiftRequest request) {
         return ResponseEntity.ok(driverService.assignShift(request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<DriverDTO> updateDriver(@PathVariable String id, @RequestBody UpdateDriverRequest request) {
         return ResponseEntity.ok(driverService.updateDriver(id, request));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<Void> deleteDriver(@PathVariable String id) {
         driverService.deleteDriver(id);
         return ResponseEntity.noContent().build();

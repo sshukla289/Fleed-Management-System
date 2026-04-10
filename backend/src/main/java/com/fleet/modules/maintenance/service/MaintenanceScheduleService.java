@@ -1,6 +1,7 @@
 package com.fleet.modules.maintenance.service;
 
 import com.fleet.modules.audit.service.AuditLogService;
+import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.maintenance.dto.CreateMaintenanceScheduleRequest;
 import com.fleet.modules.maintenance.dto.MaintenanceScheduleDTO;
 import com.fleet.modules.maintenance.entity.MaintenanceSchedule;
@@ -27,15 +28,18 @@ public class MaintenanceScheduleService {
     private final MaintenanceScheduleRepository maintenanceScheduleRepository;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final CurrentUserService currentUserService;
 
     public MaintenanceScheduleService(
         MaintenanceScheduleRepository maintenanceScheduleRepository,
         NotificationService notificationService,
-        AuditLogService auditLogService
+        AuditLogService auditLogService,
+        CurrentUserService currentUserService
     ) {
         this.maintenanceScheduleRepository = maintenanceScheduleRepository;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
+        this.currentUserService = currentUserService;
     }
 
     public List<MaintenanceScheduleDTO> getSchedules() {
@@ -87,7 +91,7 @@ public class MaintenanceScheduleService {
         }
 
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             saved.isBlockDispatch() ? "MAINTENANCE_BLOCKED" : "MAINTENANCE_SCHEDULE_CREATED",
             "MAINTENANCE_SCHEDULE",
             saved.getId(),

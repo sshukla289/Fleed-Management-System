@@ -1,6 +1,8 @@
 package com.fleet.modules.telemetry.service;
 
 import com.fleet.modules.alert.service.AlertService;
+import com.fleet.modules.auth.entity.AppRole;
+import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.telemetry.dto.TelemetryDTO;
 import com.fleet.modules.telemetry.entity.Telemetry;
 import com.fleet.modules.telemetry.repository.TelemetryRepository;
@@ -9,22 +11,29 @@ import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.trip.repository.TripRepository;
 import java.time.LocalDateTime;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 @Service
 public class TelemetryService {
 
-    @Autowired
-    private TelemetryRepository repo;
+    private final TelemetryRepository telemetryRepository;
+    private final TripRepository tripRepository;
+    private final AlertService alertService;
+    private final CurrentUserService currentUserService;
 
-    @Autowired
-    private TripRepository tripRepository;
-
-    @Autowired
-    private AlertService alertService;
+    public TelemetryService(
+        TelemetryRepository telemetryRepository,
+        TripRepository tripRepository,
+        AlertService alertService,
+        CurrentUserService currentUserService
+    ) {
+        this.telemetryRepository = telemetryRepository;
+        this.tripRepository = tripRepository;
+        this.alertService = alertService;
+        this.currentUserService = currentUserService;
+    }
 
     public void saveTelemetry(TelemetryDTO dto) {
         if (dto == null) {
@@ -49,6 +58,7 @@ public class TelemetryService {
             }
             tripId = linkedTrip.getId();
         }
+        enforceDriverAccess(vehicleId, tripId);
 
         if (vehicleId == null || vehicleId.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vehicle ID is required.");
@@ -63,7 +73,7 @@ public class TelemetryService {
         telemetry.setFuelLevel(dto.getFuelLevel());
         telemetry.setTimestamp(dto.getTimestamp() != null ? dto.getTimestamp() : LocalDateTime.now());
 
-        repo.save(telemetry);
+        telemetryRepository.save(telemetry);
         alertService.raiseTelemetryAlerts(telemetry);
     }
 
@@ -71,8 +81,9 @@ public class TelemetryService {
         if (vehicleId == null || vehicleId.trim().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vehicle ID is required.");
         }
+        enforceDriverAccess(vehicleId.trim(), null);
 
-        return repo.findByVehicleIdOrderByTimestampAsc(vehicleId.trim()).stream()
+        return telemetryRepository.findByVehicleIdOrderByTimestampAsc(vehicleId.trim()).stream()
             .map(this::toDto)
             .toList();
     }
@@ -81,8 +92,9 @@ public class TelemetryService {
         if (tripId == null || tripId.trim().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip ID is required.");
         }
+        enforceDriverAccess(null, tripId.trim());
 
-        return repo.findByTripIdOrderByTimestampAsc(tripId.trim()).stream()
+        return telemetryRepository.findByTripIdOrderByTimestampAsc(tripId.trim()).stream()
             .map(this::toDto)
             .toList();
     }
@@ -114,6 +126,38 @@ public class TelemetryService {
                 List.of(TripStatus.DISPATCHED, TripStatus.IN_PROGRESS, TripStatus.VALIDATED, TripStatus.OPTIMIZED)
             )
             .orElse(null);
+    }
+
+    private void enforceDriverAccess(String vehicleId, String tripId) {
+        if (currentUserService.getCurrentRole() != AppRole.DRIVER) {
+            return;
+        }
+
+        String actorId = currentUserService.getRequiredUser().getId();
+        if (tripId != null && !tripId.isBlank()) {
+            Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found."));
+            if (trip.getAssignedDriverId() == null || !actorId.equalsIgnoreCase(trip.getAssignedDriverId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Telemetry access is restricted to assigned driver trips.");
+            }
+            return;
+        }
+
+        if (vehicleId == null || vehicleId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver telemetry access requires a vehicle association.");
+        }
+
+        boolean ownsVehicleTrip = tripRepository
+            .findTopByAssignedDriverIdAndStatusInOrderByPlannedStartTimeDesc(
+                actorId,
+                List.of(TripStatus.DISPATCHED, TripStatus.IN_PROGRESS)
+            )
+            .map(trip -> vehicleId.equalsIgnoreCase(String.valueOf(trip.getAssignedVehicleId())))
+            .orElse(false);
+
+        if (!ownsVehicleTrip) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Drivers can only access telemetry for their active assigned vehicle.");
+        }
     }
 
     private String normalize(String value) {

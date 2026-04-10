@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +24,7 @@ public class AuditLogController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER')")
     public ResponseEntity<List<AuditLogDTO>> getAuditLogs(
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -36,6 +38,7 @@ public class AuditLogController {
     }
 
     @GetMapping("/entity/{entityType}/{entityId}")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER')")
     public ResponseEntity<List<AuditLogDTO>> getAuditLogsByEntity(
         @PathVariable String entityType,
         @PathVariable String entityId

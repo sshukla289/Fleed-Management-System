@@ -1,7 +1,9 @@
 package com.fleet.modules.trip.service;
 
 import com.fleet.modules.audit.service.AuditLogService;
+import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.entity.DriverDutyStatus;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.maintenance.entity.MaintenanceSchedule;
 import com.fleet.modules.maintenance.entity.MaintenanceScheduleStatus;
@@ -14,6 +16,7 @@ import com.fleet.modules.trip.entity.Trip;
 import com.fleet.modules.trip.entity.TripDispatchStatus;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.vehicle.entity.Vehicle;
+import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -36,6 +39,7 @@ public class TripPostProcessingService {
     private final MaintenanceScheduleRepository maintenanceScheduleRepository;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final CurrentUserService currentUserService;
 
     public TripPostProcessingService(
         VehicleRepository vehicleRepository,
@@ -43,7 +47,8 @@ public class TripPostProcessingService {
         TelemetryRepository telemetryRepository,
         MaintenanceScheduleRepository maintenanceScheduleRepository,
         NotificationService notificationService,
-        AuditLogService auditLogService
+        AuditLogService auditLogService,
+        CurrentUserService currentUserService
     ) {
         this.vehicleRepository = vehicleRepository;
         this.driverRepository = driverRepository;
@@ -51,6 +56,7 @@ public class TripPostProcessingService {
         this.maintenanceScheduleRepository = maintenanceScheduleRepository;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional
@@ -97,11 +103,11 @@ public class TripPostProcessingService {
         trip.setDispatchStatus(TripDispatchStatus.RELEASED);
 
         vehicle.setMileage(vehicle.getMileage() + actualDistance);
-        vehicle.setStatus("Idle");
+        vehicle.setStatus(VehicleOperationalStatus.IDLE.value());
         vehicle.setDriverId(null);
 
         driver.setHoursDrivenToday(driver.getHoursDrivenToday() + parseDurationHours(trip.getActualDuration(), trip));
-        driver.setStatus("Resting");
+        driver.setStatus(DriverDutyStatus.RESTING.value());
         driver.setAssignedVehicleId(null);
 
         vehicleRepository.save(vehicle);
@@ -117,7 +123,7 @@ public class TripPostProcessingService {
         }
 
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "TRIP_COMPLETED",
             "TRIP",
             trip.getId(),

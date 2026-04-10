@@ -6,8 +6,10 @@ import com.fleet.modules.alert.entity.AlertLifecycleStatus;
 import com.fleet.modules.alert.entity.AlertSeverity;
 import com.fleet.modules.alert.repository.AlertRepository;
 import com.fleet.modules.auth.entity.AppUser;
+import com.fleet.modules.auth.entity.AppRole;
 import com.fleet.modules.auth.repository.AppUserRepository;
 import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.entity.DriverDutyStatus;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.maintenance.entity.MaintenanceAlert;
 import com.fleet.modules.maintenance.entity.MaintenanceSchedule;
@@ -26,6 +28,7 @@ import com.fleet.modules.trip.entity.TripPriority;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.trip.repository.TripRepository;
 import com.fleet.modules.vehicle.entity.Vehicle;
+import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -54,19 +57,19 @@ public class DataSeeder {
         return args -> {
             if (vehicleRepository.count() == 0) {
                 vehicleRepository.saveAll(List.of(
-                    new Vehicle("VH-101", "Atlas Prime", "Heavy Truck", "Active", "Mumbai Hub", 72, 128540, "DR-201"),
-                    new Vehicle("VH-102", "Coastal Runner", "Reefer Van", "Idle", "Pune Depot", 54, 87920, "DR-202"),
-                    new Vehicle("VH-103", "Northline Carrier", "Flatbed", "Maintenance", "Nagpur Service Bay", 31, 165210, "DR-203"),
-                    new Vehicle("VH-104", "Urban Sprint", "Light Commercial", "Active", "Bengaluru Last-Mile Center", 81, 43180, "DR-204")
+                    new Vehicle("VH-101", "Atlas Prime", "Heavy Truck", VehicleOperationalStatus.ACTIVE.value(), "Mumbai Hub", 72, 128540, "DR-201"),
+                    new Vehicle("VH-102", "Coastal Runner", "Reefer Van", VehicleOperationalStatus.IDLE.value(), "Pune Depot", 54, 87920, "DR-202"),
+                    new Vehicle("VH-103", "Northline Carrier", "Flatbed", VehicleOperationalStatus.MAINTENANCE.value(), "Nagpur Service Bay", 31, 165210, "DR-203"),
+                    new Vehicle("VH-104", "Urban Sprint", "Light Commercial", VehicleOperationalStatus.ACTIVE.value(), "Bengaluru Last-Mile Center", 81, 43180, "DR-204")
                 ));
             }
 
             if (driverRepository.count() == 0) {
                 driverRepository.saveAll(List.of(
-                    new Driver("DR-201", "Aarav Sharma", "On Duty", "HMV", "VH-101", 5.2),
-                    new Driver("DR-202", "Nisha Patel", "Resting", "LMV", "VH-102", 3.4),
-                    new Driver("DR-203", "Rohan Verma", "Off Duty", "HMV", "VH-103", 0),
-                    new Driver("DR-204", "Ishita Mehra", "On Duty", "Transport", "VH-104", 6.1)
+                    new Driver("DR-201", "Aarav Sharma", DriverDutyStatus.ON_DUTY.value(), "HMV", "VH-101", 5.2),
+                    new Driver("DR-202", "Nisha Patel", DriverDutyStatus.RESTING.value(), "LMV", "VH-102", 3.4),
+                    new Driver("DR-203", "Rohan Verma", DriverDutyStatus.OFF_DUTY.value(), "HMV", "VH-103", 0),
+                    new Driver("DR-204", "Ishita Mehra", DriverDutyStatus.ON_DUTY.value(), "Transport", "VH-104", 6.1)
                 ));
             }
 
@@ -218,26 +221,69 @@ public class DataSeeder {
                 ));
             }
 
-            if (appUserRepository.count() == 0) {
-                appUserRepository.save(
-                    new AppUser(
-                        "USR-1",
-                        "Shreya Operations",
-                        "Fleet Operations Manager",
-                        "shreya.ops@fleetcontrol.dev",
-                        "West and South India",
-                        "manager@fleetcontrol.dev",
-                        passwordEncoder.encode("password123")
-                    )
-                );
-            } else {
-                appUserRepository.findAll().forEach(user -> {
-                    if (user.getPassword() != null && !user.getPassword().startsWith("$2")) {
-                        user.setPassword(passwordEncoder.encode(user.getPassword()));
-                        appUserRepository.save(user);
-                    }
-                });
-            }
+            upsertUser(
+                appUserRepository,
+                passwordEncoder,
+                "USR-1",
+                "Shreya Operations",
+                AppRole.FLEET_MANAGER,
+                "shreya.ops@fleetcontrol.dev",
+                "West and South India",
+                "manager@fleetcontrol.dev",
+                "password123"
+            );
+            upsertUser(
+                appUserRepository,
+                passwordEncoder,
+                "USR-2",
+                "Admin Ops",
+                AppRole.ADMIN,
+                "admin.ops@fleetcontrol.dev",
+                "Global",
+                "admin@fleetcontrol.dev",
+                "password123"
+            );
+            upsertUser(
+                appUserRepository,
+                passwordEncoder,
+                "USR-3",
+                "Dispatch Planner",
+                AppRole.DISPATCHER_PLANNER,
+                "dispatch.planner@fleetcontrol.dev",
+                "West Corridor",
+                "dispatcher@fleetcontrol.dev",
+                "password123"
+            );
+            upsertUser(
+                appUserRepository,
+                passwordEncoder,
+                "USR-4",
+                "Maintenance Lead",
+                AppRole.MAINTENANCE_MANAGER,
+                "maintenance.lead@fleetcontrol.dev",
+                "Workshop Bay",
+                "maintenance@fleetcontrol.dev",
+                "password123"
+            );
+            upsertUser(
+                appUserRepository,
+                passwordEncoder,
+                "DR-201",
+                "Driver Console",
+                AppRole.DRIVER,
+                "driver.console@fleetcontrol.dev",
+                "Field",
+                "driver@fleetcontrol.dev",
+                "password123"
+            );
+
+            appUserRepository.findAll().forEach(user -> {
+                user.setRole(AppRole.fromStoredValue(user.getRole()).name());
+                if (user.getPassword() != null && !user.getPassword().startsWith("$2")) {
+                    user.setPassword(passwordEncoder.encode(user.getPassword()));
+                }
+                appUserRepository.save(user);
+            });
 
             if (telemetryRepository.count() == 0) {
                 telemetryRepository.saveAll(List.of(
@@ -269,5 +315,35 @@ public class DataSeeder {
         telemetry.setFuelLevel(fuelLevel);
         telemetry.setTimestamp(LocalDateTime.now().minusMinutes(minutesAgo));
         return telemetry;
+    }
+
+    private void upsertUser(
+        AppUserRepository appUserRepository,
+        PasswordEncoder passwordEncoder,
+        String id,
+        String name,
+        AppRole role,
+        String email,
+        String assignedRegion,
+        String loginEmail,
+        String rawPassword
+    ) {
+        AppUser user = appUserRepository.findByLoginEmailIgnoreCase(loginEmail).orElse(null);
+        if (user == null) {
+            user = new AppUser();
+            user.setId(id);
+            user.setLoginEmail(loginEmail);
+        }
+
+        user.setName(name);
+        user.setRole(role.name());
+        user.setEmail(email);
+        user.setAssignedRegion(assignedRegion);
+        user.setPassword(
+            user.getPassword() != null && user.getPassword().startsWith("$2")
+                ? user.getPassword()
+                : passwordEncoder.encode(rawPassword)
+        );
+        appUserRepository.save(user);
     }
 }

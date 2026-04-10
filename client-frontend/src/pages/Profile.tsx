@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { DriverCard } from '../components/DriverCard'
 import { PageHeader } from '../components/PageHeader'
 import { useAuth } from '../context/useAuth'
+import { canAccessDrivers } from '../security/permissions'
 import { changePassword, fetchDrivers, fetchProfile, updateProfile } from '../services/apiService'
 import type { ChangePasswordInput, Driver, UpdateProfileInput, UserProfile } from '../types'
 
@@ -30,10 +31,19 @@ export function Profile() {
 
   useEffect(() => {
     async function loadProfile() {
-      const [profileData, driverData] = await Promise.all([fetchProfile(), fetchDrivers()])
+      const profileData = await fetchProfile()
 
       setProfile(profileData)
-      setDrivers(driverData.slice(0, 1))
+      if (canAccessDrivers(profileData.role)) {
+        try {
+          const driverData = await fetchDrivers()
+          setDrivers(driverData.slice(0, 1))
+        } catch {
+          setDrivers([])
+        }
+      } else {
+        setDrivers([])
+      }
       setForm({
         name: profileData.name,
         role: profileData.role,
@@ -105,17 +115,13 @@ export function Profile() {
           <div className="panel__header">
             <div>
               <h3>Edit profile</h3>
-              <p className="muted">Save the account details shown in the navbar and profile page.</p>
+              <p className="muted">Save personal account details. Role changes are managed by administrators.</p>
             </div>
           </div>
           <div className="form-grid">
             <label className="input-group">
               <span>Name</span>
               <input onChange={(event) => setForm({ ...form, name: event.target.value })} required type="text" value={form.name} />
-            </label>
-            <label className="input-group">
-              <span>Role</span>
-              <input onChange={(event) => setForm({ ...form, role: event.target.value })} required type="text" value={form.role} />
             </label>
             <label className="input-group">
               <span>Email</span>
@@ -204,11 +210,13 @@ export function Profile() {
               now stored securely in the backend.
             </p>
           </article>
-          <div>
-            {drivers.map((driver) => (
-              <DriverCard key={driver.id} driver={driver} />
-            ))}
-          </div>
+          {drivers.length ? (
+            <div>
+              {drivers.map((driver) => (
+                <DriverCard key={driver.id} driver={driver} />
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>

@@ -8,6 +8,7 @@ import com.fleet.modules.trip.entity.TripStatus;
 import java.time.LocalDateTime;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,6 +25,7 @@ public class OperationalAnalyticsController {
     }
 
     @GetMapping("/trips")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
     public ResponseEntity<TripAnalyticsDTO> getTripAnalytics(
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -40,6 +42,7 @@ public class OperationalAnalyticsController {
     }
 
     @GetMapping("/vehicles")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
     public ResponseEntity<VehicleAnalyticsDTO> getVehicleAnalytics(
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -53,6 +56,7 @@ public class OperationalAnalyticsController {
     }
 
     @GetMapping("/drivers")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
     public ResponseEntity<DriverAnalyticsDTO> getDriverAnalytics(
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)

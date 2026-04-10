@@ -3,6 +3,7 @@ package com.fleet.modules.compliance.service;
 import com.fleet.modules.compliance.dto.ComplianceCheckDTO;
 import com.fleet.modules.compliance.dto.ComplianceCheckResultDTO;
 import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.entity.DriverDutyStatus;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.maintenance.entity.MaintenanceSchedule;
 import com.fleet.modules.maintenance.entity.MaintenanceScheduleStatus;
@@ -14,6 +15,7 @@ import com.fleet.modules.trip.entity.TripComplianceStatus;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.trip.repository.TripRepository;
 import com.fleet.modules.vehicle.entity.Vehicle;
+import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -68,7 +70,7 @@ public class ComplianceService {
             addFailure(checks, blockers, "vehicle-exists", "Vehicle readiness", "Assigned vehicle was not found.");
         } else {
             Vehicle vehicle = vehicleLookup.get();
-            if ("Maintenance".equalsIgnoreCase(vehicle.getStatus())) {
+            if (isVehicleInMaintenance(vehicle)) {
                 addFailure(checks, blockers, "vehicle-maintenance", "Vehicle readiness", "Vehicle is in maintenance and cannot be dispatched.");
             } else {
                 addPass(checks, "vehicle-maintenance", "Vehicle readiness", "Vehicle is available for dispatch.");
@@ -87,7 +89,7 @@ public class ComplianceService {
             addFailure(checks, blockers, "driver-exists", "Driver eligibility", "Assigned driver was not found.");
         } else {
             Driver driver = driverLookup.get();
-            if ("Off Duty".equalsIgnoreCase(driver.getStatus())) {
+            if (isDriverOffDuty(driver)) {
                 addFailure(checks, blockers, "driver-duty", "Driver eligibility", "Driver is off duty and cannot be dispatched.");
             } else {
                 addPass(checks, "driver-duty", "Driver eligibility", "Driver is available for duty.");
@@ -233,5 +235,21 @@ public class ComplianceService {
     private void addFailure(List<ComplianceCheckDTO> checks, List<String> blockers, String code, String label, String message) {
         checks.add(new ComplianceCheckDTO(code, label, false, true, message));
         blockers.add(message);
+    }
+
+    private boolean isDriverOffDuty(Driver driver) {
+        try {
+            return DriverDutyStatus.fromValue(driver.getStatus()) == DriverDutyStatus.OFF_DUTY;
+        } catch (IllegalArgumentException exception) {
+            return true;
+        }
+    }
+
+    private boolean isVehicleInMaintenance(Vehicle vehicle) {
+        try {
+            return VehicleOperationalStatus.fromValue(vehicle.getStatus()) == VehicleOperationalStatus.MAINTENANCE;
+        } catch (IllegalArgumentException exception) {
+            return true;
+        }
     }
 }

@@ -6,6 +6,7 @@ import com.fleet.modules.vehicle.dto.VehicleDTO;
 import com.fleet.modules.vehicle.service.VehicleService;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,11 +27,13 @@ public class VehicleController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
     public ResponseEntity<List<VehicleDTO>> getVehicles() {
         return ResponseEntity.ok(vehicleService.getVehicles());
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
     public ResponseEntity<VehicleDTO> getVehicle(@PathVariable String id) {
         return vehicleService.getVehicleById(id)
             .map(ResponseEntity::ok)
@@ -38,16 +41,19 @@ public class VehicleController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER')")
     public ResponseEntity<VehicleDTO> createVehicle(@RequestBody CreateVehicleRequest request) {
         return ResponseEntity.ok(vehicleService.createVehicle(request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER')")
     public ResponseEntity<VehicleDTO> updateVehicle(@PathVariable String id, @RequestBody UpdateVehicleRequest request) {
         return ResponseEntity.ok(vehicleService.updateVehicle(id, request));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER')")
     public ResponseEntity<Void> deleteVehicle(@PathVariable String id) {
         vehicleService.deleteVehicle(id);
         return ResponseEntity.noContent().build();

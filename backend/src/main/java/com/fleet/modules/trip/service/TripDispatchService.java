@@ -3,6 +3,7 @@ package com.fleet.modules.trip.service;
 import com.fleet.modules.compliance.dto.ComplianceCheckResultDTO;
 import com.fleet.modules.compliance.service.ComplianceService;
 import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.entity.DriverDutyStatus;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.notification.service.NotificationService;
 import com.fleet.modules.trip.dto.CompleteTripRequest;
@@ -10,6 +11,7 @@ import com.fleet.modules.trip.entity.Trip;
 import com.fleet.modules.trip.entity.TripDispatchStatus;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.vehicle.entity.Vehicle;
+import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -69,9 +71,9 @@ public class TripDispatchService {
         Driver driver = driverRepository.findById(trip.getAssignedDriverId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assigned driver not found."));
 
-        vehicle.setStatus("Active");
+        vehicle.setStatus(VehicleOperationalStatus.ACTIVE.value());
         vehicle.setDriverId(driver.getId());
-        driver.setStatus("On Duty");
+        driver.setStatus(DriverDutyStatus.ON_DUTY.value());
         driver.setAssignedVehicleId(vehicle.getId());
 
         vehicleRepository.save(vehicle);

@@ -1,7 +1,10 @@
 package com.fleet.modules.trip.service;
 
 import com.fleet.modules.audit.service.AuditLogService;
+import com.fleet.modules.auth.entity.AppRole;
+import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.entity.DriverDutyStatus;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.trip.dto.CompleteTripRequest;
 import com.fleet.modules.trip.dto.CreateTripRequest;
@@ -16,6 +19,7 @@ import com.fleet.modules.trip.entity.TripOptimizationStatus;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.trip.repository.TripRepository;
 import com.fleet.modules.vehicle.entity.Vehicle;
+import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -38,6 +42,7 @@ public class TripService {
     private final DriverRepository driverRepository;
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
+    private final CurrentUserService currentUserService;
 
     public TripService(
         TripRepository tripRepository,
@@ -47,7 +52,8 @@ public class TripService {
         VehicleRepository vehicleRepository,
         DriverRepository driverRepository,
         AuditLogService auditLogService,
-        NotificationService notificationService
+        NotificationService notificationService,
+        CurrentUserService currentUserService
     ) {
         this.tripRepository = tripRepository;
         this.validationService = validationService;
@@ -57,17 +63,23 @@ public class TripService {
         this.driverRepository = driverRepository;
         this.auditLogService = auditLogService;
         this.notificationService = notificationService;
+        this.currentUserService = currentUserService;
     }
 
     public List<TripDTO> getTrips() {
+        AppRole role = currentUserService.getCurrentRole();
+        String actorId = currentUserService.getRequiredUser().getId();
         return tripRepository.findAll().stream()
+            .filter(trip -> role != AppRole.DRIVER || actorId.equalsIgnoreCase(String.valueOf(trip.getAssignedDriverId())))
             .sorted(this::compareTrips)
             .map(this::toDto)
             .toList();
     }
 
     public TripDTO getTripById(String tripId) {
-        return toDto(findTrip(tripId));
+        Trip trip = findTrip(tripId);
+        enforceReadAccess(trip);
+        return toDto(trip);
     }
 
     @Transactional
@@ -97,7 +109,7 @@ public class TripService {
 
         Trip savedTrip = tripRepository.save(trip);
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "TRIP_CREATED",
             "TRIP",
             savedTrip.getId(),
@@ -115,6 +127,7 @@ public class TripService {
     @Transactional
     public TripValidationResultDTO validateTrip(String tripId) {
         Trip trip = findTrip(tripId);
+        enforceReadAccess(trip);
         ensurePlannable(trip);
         TripValidationResultDTO result = validationService.evaluate(trip);
 
@@ -122,7 +135,7 @@ public class TripService {
         trip.setStatus(result.valid() ? TripStatus.VALIDATED : TripStatus.BLOCKED);
         tripRepository.save(trip);
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "TRIP_VALIDATED",
             "TRIP",
             trip.getId(),
@@ -139,6 +152,7 @@ public class TripService {
     @Transactional
     public TripOptimizationResultDTO optimizeTrip(String tripId) {
         Trip trip = findTrip(tripId);
+        enforceReadAccess(trip);
         ensurePlannable(trip);
         if (trip.getStatus() == TripStatus.DRAFT) {
             TripValidationResultDTO validation = validationService.evaluate(trip);
@@ -156,7 +170,7 @@ public class TripService {
         trip.setStatus(result.optimizationStatus() == TripOptimizationStatus.OPTIMIZED ? TripStatus.OPTIMIZED : TripStatus.BLOCKED);
         tripRepository.save(trip);
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "TRIP_OPTIMIZED",
             "TRIP",
             trip.getId(),
@@ -174,6 +188,7 @@ public class TripService {
     @Transactional
     public TripDTO dispatchTrip(String tripId) {
         Trip trip = findTrip(tripId);
+        enforceReadAccess(trip);
 
         if (trip.getStatus() == TripStatus.DRAFT || trip.getStatus() == TripStatus.BLOCKED) {
             TripValidationResultDTO validation = validationService.evaluate(trip);
@@ -206,7 +221,7 @@ public class TripService {
         Trip dispatched = dispatchService.dispatch(trip);
         tripRepository.save(dispatched);
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "TRIP_DISPATCHED",
             "TRIP",
             dispatched.getId(),
@@ -224,10 +239,11 @@ public class TripService {
     @Transactional
     public TripDTO startTrip(String tripId) {
         Trip trip = findTrip(tripId);
+        enforceDriverOwnershipForAction(trip, "start");
         Trip started = dispatchService.start(trip);
         tripRepository.save(started);
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "TRIP_STARTED",
             "TRIP",
             started.getId(),
@@ -244,6 +260,7 @@ public class TripService {
     @Transactional
     public TripDTO completeTrip(String tripId, CompleteTripRequest request) {
         Trip trip = findTrip(tripId);
+        enforceDriverOwnershipForAction(trip, "complete");
         Trip completed = dispatchService.complete(trip, request);
         tripRepository.save(completed);
         return toDto(completed);
@@ -252,6 +269,7 @@ public class TripService {
     @Transactional
     public TripDTO cancelTrip(String tripId, String reason) {
         Trip trip = findTrip(tripId);
+        enforceReadAccess(trip);
         ensurePlannable(trip);
 
         if (trip.getStatus() == TripStatus.CANCELLED) {
@@ -267,7 +285,7 @@ public class TripService {
 
         Trip saved = tripRepository.save(trip);
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "TRIP_CANCELLED",
             "TRIP",
             saved.getId(),
@@ -395,7 +413,7 @@ public class TripService {
         if (trip.getAssignedVehicleId() != null && !trip.getAssignedVehicleId().isBlank()) {
             Vehicle vehicle = vehicleRepository.findById(trip.getAssignedVehicleId()).orElse(null);
             if (vehicle != null) {
-                vehicle.setStatus("Idle");
+                vehicle.setStatus(VehicleOperationalStatus.IDLE.value());
                 vehicle.setDriverId(null);
                 vehicleRepository.save(vehicle);
             }
@@ -404,10 +422,32 @@ public class TripService {
         if (trip.getAssignedDriverId() != null && !trip.getAssignedDriverId().isBlank()) {
             Driver driver = driverRepository.findById(trip.getAssignedDriverId()).orElse(null);
             if (driver != null) {
-                driver.setStatus("Off Duty");
+                driver.setStatus(DriverDutyStatus.OFF_DUTY.value());
                 driver.setAssignedVehicleId(null);
                 driverRepository.save(driver);
             }
+        }
+    }
+
+    private void enforceReadAccess(Trip trip) {
+        if (currentUserService.getCurrentRole() != AppRole.DRIVER) {
+            return;
+        }
+
+        String actorId = currentUserService.getRequiredUser().getId();
+        if (trip.getAssignedDriverId() == null || !actorId.equalsIgnoreCase(trip.getAssignedDriverId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver access is restricted to assigned trips.");
+        }
+    }
+
+    private void enforceDriverOwnershipForAction(Trip trip, String action) {
+        enforceReadAccess(trip);
+        if (currentUserService.getCurrentRole() != AppRole.DRIVER) {
+            return;
+        }
+
+        if (trip.getAssignedDriverId() == null || !trip.getAssignedDriverId().equalsIgnoreCase(currentUserService.getRequiredUser().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Drivers can only " + action + " their own trips.");
         }
     }
 

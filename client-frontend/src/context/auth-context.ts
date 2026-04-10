@@ -4,8 +4,9 @@ import type { AuthSession, LoginCredentials, UserProfile } from '../types'
 export interface AuthContextValue {
   session: AuthSession | null
   isAuthenticated: boolean
+  isLoadingSession: boolean
   login: (credentials: LoginCredentials) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   updateSessionProfile: (profile: UserProfile) => void
 }
 

@@ -1,5 +1,5 @@
-import { useMemo, useState, type PropsWithChildren } from 'react'
-import { login as loginRequest } from '../services/apiService'
+import { useEffect, useMemo, useState, type PropsWithChildren } from 'react'
+import { fetchCurrentUser, login as loginRequest, logoutRequest } from '../services/apiService'
 import type { AuthSession, LoginCredentials, UserProfile } from '../types'
 import { AUTH_STORAGE_KEY, AuthContext, type AuthContextValue } from './auth-context'
 
@@ -23,16 +23,82 @@ function readStoredSession() {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<AuthSession | null>(() => readStoredSession())
+  const [isLoadingSession, setIsLoadingSession] = useState(() => Boolean(readStoredSession()))
+
+  useEffect(() => {
+    let cancelled = false
+    const storedSession = readStoredSession()
+
+    if (!storedSession) {
+      setIsLoadingSession(false)
+      return undefined
+    }
+    const storedToken = storedSession.token
+
+    async function validateStoredSession() {
+      try {
+        const profile = await fetchCurrentUser()
+        if (cancelled) {
+          return
+        }
+
+        const nextSession = {
+          token: storedToken,
+          profile,
+        }
+        setSession(nextSession)
+        window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextSession))
+      } catch {
+        if (cancelled) {
+          return
+        }
+        setSession(null)
+        window.localStorage.removeItem(AUTH_STORAGE_KEY)
+      } finally {
+        if (!cancelled) {
+          setIsLoadingSession(false)
+        }
+      }
+    }
+
+    void validateStoredSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function login(credentials: LoginCredentials) {
-    const nextSession = await loginRequest(credentials)
-    setSession(nextSession)
-    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextSession))
+    setIsLoadingSession(true)
+    try {
+      const nextSession = await loginRequest(credentials)
+      setSession(nextSession)
+      window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextSession))
+
+      try {
+        const profile = await fetchCurrentUser()
+        const hydratedSession = { ...nextSession, profile }
+        setSession(hydratedSession)
+        window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(hydratedSession))
+      } catch (error) {
+        setSession(null)
+        window.localStorage.removeItem(AUTH_STORAGE_KEY)
+        throw error
+      }
+    } finally {
+      setIsLoadingSession(false)
+    }
   }
 
-  function logout() {
-    setSession(null)
-    window.localStorage.removeItem(AUTH_STORAGE_KEY)
+  async function logout() {
+    try {
+      if (session?.token) {
+        await logoutRequest()
+      }
+    } finally {
+      setSession(null)
+      window.localStorage.removeItem(AUTH_STORAGE_KEY)
+    }
   }
 
   function updateSessionProfile(profile: UserProfile) {
@@ -54,11 +120,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     () => ({
       session,
       isAuthenticated: Boolean(session),
+      isLoadingSession,
       login,
       logout,
       updateSessionProfile,
     }),
-    [session],
+    [isLoadingSession, session],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

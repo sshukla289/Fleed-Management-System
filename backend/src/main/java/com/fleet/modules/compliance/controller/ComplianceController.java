@@ -3,6 +3,7 @@ package com.fleet.modules.compliance.controller;
 import com.fleet.modules.compliance.dto.ComplianceCheckResultDTO;
 import com.fleet.modules.compliance.service.ComplianceService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +20,7 @@ public class ComplianceController {
     }
 
     @GetMapping("/checks/{tripId}")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
     public ResponseEntity<ComplianceCheckResultDTO> getTripCompliance(@PathVariable String tripId) {
         return ResponseEntity.ok(complianceService.checkTrip(tripId));
     }

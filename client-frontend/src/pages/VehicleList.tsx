@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { VehicleCard } from '../components/VehicleCard'
+import { useAuth } from '../context/useAuth'
+import { canManageVehicles } from '../security/permissions'
 import { createVehicle, deleteVehicle, fetchVehicles, updateVehicle } from '../services/apiService'
 import type { CreateVehicleInput, Vehicle } from '../types'
 
@@ -93,6 +95,7 @@ function statusLabel(status: Vehicle['status']) {
 }
 
 export function VehicleList() {
+  const { session } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicleId, setSelectedVehicleId] = useState('')
@@ -105,6 +108,7 @@ export function VehicleList() {
   const [form, setForm] = useState<CreateVehicleInput>(initialForm)
   const [error, setError] = useState('')
   const query = searchParams.get('q')?.trim().toLowerCase() ?? ''
+  const canManage = canManageVehicles(session?.profile.role)
 
   useEffect(() => {
     void fetchVehicles().then((vehicleData) => {
@@ -123,7 +127,7 @@ export function VehicleList() {
           vehicle.id.toLowerCase().includes(query) ||
           vehicle.name.toLowerCase().includes(query) ||
           vehicle.location.toLowerCase().includes(query) ||
-          vehicle.driverId.toLowerCase().includes(query)
+          (vehicle.driverId ?? '').toLowerCase().includes(query)
         const matchesStatus = statusFilter === 'All' || vehicle.status === statusFilter
         return matchesQuery && matchesStatus
       }),
@@ -340,6 +344,9 @@ export function VehicleList() {
           <button
             className="vehicle-tracking-create"
             onClick={() => {
+              if (!canManage) {
+                return
+              }
               if (showForm) {
                 resetForm()
               } else {
@@ -349,8 +356,9 @@ export function VehicleList() {
               }
             }}
             type="button"
+            disabled={!canManage}
           >
-            {showForm ? 'Close vehicle form' : 'Create vehicle'}
+            {canManage ? (showForm ? 'Close vehicle form' : 'Create vehicle') : 'Read-only access'}
           </button>
         </aside>
 
@@ -361,18 +369,18 @@ export function VehicleList() {
               <h1>{selectedVehicle?.name ?? 'Select a vehicle'}</h1>
               <p>
                 {selectedVehicle
-                  ? `${selectedVehicle.id} · ${selectedVehicle.type} · ${selectedVehicle.location}`
+                  ? `${selectedVehicle.id} - ${selectedVehicle.type} - ${selectedVehicle.location}`
                   : 'Pick a vehicle from the board to inspect route, fuel, and assignment details.'}
               </p>
             </div>
             <div className="vehicle-tracking-hero__actions">
-              <button className="secondary-button" onClick={() => selectedVehicle && handleEdit(selectedVehicle)} type="button">
+              <button className="secondary-button" disabled={!canManage} onClick={() => selectedVehicle && canManage && handleEdit(selectedVehicle)} type="button">
                 Edit vehicle
               </button>
               <button
                 className="secondary-button danger-button"
-                disabled={!selectedVehicle || deletingVehicleId === selectedVehicle.id}
-                onClick={() => selectedVehicle && handleDelete(selectedVehicle)}
+                disabled={!canManage || !selectedVehicle || deletingVehicleId === selectedVehicle.id}
+                onClick={() => selectedVehicle && canManage && handleDelete(selectedVehicle)}
                 type="button"
               >
                 Delete
@@ -388,7 +396,7 @@ export function VehicleList() {
             ))}
           </div>
 
-          {showForm ? (
+          {showForm && canManage ? (
             <form className="vehicle-tracking-form" onSubmit={handleSubmit}>
               <div className="vehicle-tracking-form__header">
                 <div>

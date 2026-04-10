@@ -5,7 +5,10 @@ import com.fleet.modules.driver.dto.CreateDriverRequest;
 import com.fleet.modules.driver.dto.DriverDTO;
 import com.fleet.modules.driver.dto.UpdateDriverRequest;
 import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.entity.DriverDutyStatus;
 import com.fleet.modules.driver.repository.DriverRepository;
+import com.fleet.modules.trip.entity.TripStatus;
+import com.fleet.modules.trip.repository.TripRepository;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -15,9 +18,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class DriverService {
 
     private final DriverRepository driverRepository;
+    private final TripRepository tripRepository;
 
-    public DriverService(DriverRepository driverRepository) {
+    public DriverService(DriverRepository driverRepository, TripRepository tripRepository) {
         this.driverRepository = driverRepository;
+        this.tripRepository = tripRepository;
     }
 
     public List<DriverDTO> getDrivers() {
@@ -35,12 +40,16 @@ public class DriverService {
             request.hoursDrivenToday()
         );
 
+        String nextDriverId = nextId();
+        String normalizedVehicleId = normalizeNullable(request.assignedVehicleId());
+        enforceTripAssignmentConsistency(nextDriverId, normalizedVehicleId);
+
         Driver driver = new Driver(
-            nextId(),
+            nextDriverId,
             request.name().trim(),
-            request.status().trim(),
+            DriverDutyStatus.fromValue(request.status()).value(),
             request.licenseType().trim(),
-            normalizeNullable(request.assignedVehicleId()),
+            normalizedVehicleId,
             request.hoursDrivenToday()
         );
 
@@ -52,15 +61,18 @@ public class DriverService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Driver ID and status are required.");
         }
 
-        if (!List.of("On Duty", "Off Duty", "Resting").contains(request.status().trim())) {
+        if (!DriverDutyStatus.isSupported(request.status().trim())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Driver status is invalid.");
         }
 
         Driver driver = driverRepository.findById(request.driverId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver not found."));
 
-        driver.setStatus(request.status().trim());
-        driver.setAssignedVehicleId(normalizeNullable(request.assignedVehicleId()));
+        String normalizedVehicleId = normalizeNullable(request.assignedVehicleId());
+        enforceTripAssignmentConsistency(driver.getId(), normalizedVehicleId);
+
+        driver.setStatus(DriverDutyStatus.fromValue(request.status()).value());
+        driver.setAssignedVehicleId(normalizedVehicleId);
         return toDto(driverRepository.save(driver));
     }
 
@@ -76,10 +88,13 @@ public class DriverService {
         Driver driver = driverRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver not found."));
 
+        String normalizedVehicleId = normalizeNullable(request.assignedVehicleId());
+        enforceTripAssignmentConsistency(driver.getId(), normalizedVehicleId);
+
         driver.setName(request.name().trim());
-        driver.setStatus(request.status().trim());
+        driver.setStatus(DriverDutyStatus.fromValue(request.status()).value());
         driver.setLicenseType(request.licenseType().trim());
-        driver.setAssignedVehicleId(normalizeNullable(request.assignedVehicleId()));
+        driver.setAssignedVehicleId(normalizedVehicleId);
         driver.setHoursDrivenToday(request.hoursDrivenToday());
         return toDto(driverRepository.save(driver));
     }
@@ -135,7 +150,7 @@ public class DriverService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Driver fields are required.");
         }
 
-        if (!List.of("On Duty", "Off Duty", "Resting").contains(status.trim())) {
+        if (!DriverDutyStatus.isSupported(status.trim())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Driver status is invalid.");
         }
 
@@ -150,6 +165,42 @@ public class DriverService {
 
     private String normalizeNullable(String value) {
         return isBlank(value) ? null : value.trim();
+    }
+
+    private void enforceTripAssignmentConsistency(String driverId, String vehicleId) {
+        List<TripStatus> activeStatuses = List.of(
+            TripStatus.DRAFT,
+            TripStatus.VALIDATED,
+            TripStatus.OPTIMIZED,
+            TripStatus.DISPATCHED,
+            TripStatus.IN_PROGRESS
+        );
+
+        tripRepository
+            .findTopByAssignedDriverIdAndStatusInOrderByPlannedStartTimeDesc(driverId, activeStatuses)
+            .ifPresent(trip -> {
+                if (vehicleId == null || !vehicleId.equalsIgnoreCase(String.valueOf(trip.getAssignedVehicleId()))) {
+                    throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Driver assignment is managed by active trip " + trip.getId() + "."
+                    );
+                }
+            });
+
+        if (vehicleId == null) {
+            return;
+        }
+
+        tripRepository
+            .findTopByAssignedVehicleIdAndStatusInOrderByPlannedStartTimeDesc(vehicleId, activeStatuses)
+            .ifPresent(trip -> {
+                if (!driverId.equalsIgnoreCase(String.valueOf(trip.getAssignedDriverId()))) {
+                    throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Vehicle assignment is managed by active trip " + trip.getId() + "."
+                    );
+                }
+            });
     }
 
     private boolean isBlank(String value) {

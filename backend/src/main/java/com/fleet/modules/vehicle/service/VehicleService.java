@@ -4,9 +4,12 @@ import com.fleet.modules.vehicle.dto.CreateVehicleRequest;
 import com.fleet.modules.vehicle.dto.UpdateVehicleRequest;
 import com.fleet.modules.vehicle.dto.VehicleDTO;
 import com.fleet.modules.vehicle.entity.Vehicle;
+import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.util.List;
 import java.util.Optional;
+import com.fleet.modules.trip.entity.TripStatus;
+import com.fleet.modules.trip.repository.TripRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -15,9 +18,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class VehicleService {
 
     private final VehicleRepository vehicleRepository;
+    private final TripRepository tripRepository;
 
-    public VehicleService(VehicleRepository vehicleRepository) {
+    public VehicleService(VehicleRepository vehicleRepository, TripRepository tripRepository) {
         this.vehicleRepository = vehicleRepository;
+        this.tripRepository = tripRepository;
     }
 
     public List<VehicleDTO> getVehicles() {
@@ -41,15 +46,19 @@ public class VehicleService {
             request.driverId()
         );
 
+        String nextId = nextId();
+        String normalizedDriverId = normalizeNullable(request.driverId());
+        enforceTripAssignmentConsistency(nextId, normalizedDriverId);
+
         Vehicle vehicle = new Vehicle(
-            nextId(),
+            nextId,
             request.name(),
             request.type(),
-            request.status(),
+            VehicleOperationalStatus.fromValue(request.status()).value(),
             request.location(),
             request.fuelLevel(),
             request.mileage(),
-            request.driverId()
+            normalizedDriverId
         );
 
         return toDto(vehicleRepository.save(vehicle));
@@ -69,13 +78,16 @@ public class VehicleService {
         Vehicle vehicle = vehicleRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vehicle not found."));
 
+        String normalizedDriverId = normalizeNullable(request.driverId());
+        enforceTripAssignmentConsistency(vehicle.getId(), normalizedDriverId);
+
         vehicle.setName(request.name().trim());
         vehicle.setType(request.type().trim());
-        vehicle.setStatus(request.status().trim());
+        vehicle.setStatus(VehicleOperationalStatus.fromValue(request.status()).value());
         vehicle.setLocation(request.location().trim());
         vehicle.setFuelLevel(request.fuelLevel());
         vehicle.setMileage(request.mileage());
-        vehicle.setDriverId(request.driverId().trim());
+        vehicle.setDriverId(normalizedDriverId);
         return toDto(vehicleRepository.save(vehicle));
     }
 
@@ -130,11 +142,11 @@ public class VehicleService {
         int mileage,
         String driverId
     ) {
-        if (isBlank(name) || isBlank(type) || isBlank(status) || isBlank(location) || isBlank(driverId)) {
+        if (isBlank(name) || isBlank(type) || isBlank(status) || isBlank(location)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vehicle fields are required.");
         }
 
-        if (!List.of("Active", "Idle", "Maintenance").contains(status.trim())) {
+        if (!VehicleOperationalStatus.isSupported(status.trim())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vehicle status is invalid.");
         }
 
@@ -145,6 +157,46 @@ public class VehicleService {
         if (mileage < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mileage must be zero or greater.");
         }
+    }
+
+    private void enforceTripAssignmentConsistency(String vehicleId, String driverId) {
+        List<TripStatus> activeStatuses = List.of(
+            TripStatus.DRAFT,
+            TripStatus.VALIDATED,
+            TripStatus.OPTIMIZED,
+            TripStatus.DISPATCHED,
+            TripStatus.IN_PROGRESS
+        );
+
+        tripRepository
+            .findTopByAssignedVehicleIdAndStatusInOrderByPlannedStartTimeDesc(vehicleId, activeStatuses)
+            .ifPresent(trip -> {
+                if (driverId == null || !driverId.equalsIgnoreCase(String.valueOf(trip.getAssignedDriverId()))) {
+                    throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Vehicle assignment is managed by active trip " + trip.getId() + "."
+                    );
+                }
+            });
+
+        if (driverId == null) {
+            return;
+        }
+
+        tripRepository
+            .findTopByAssignedDriverIdAndStatusInOrderByPlannedStartTimeDesc(driverId, activeStatuses)
+            .ifPresent(trip -> {
+                if (!vehicleId.equalsIgnoreCase(String.valueOf(trip.getAssignedVehicleId()))) {
+                    throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Driver assignment is managed by active trip " + trip.getId() + "."
+                    );
+                }
+            });
+    }
+
+    private String normalizeNullable(String value) {
+        return isBlank(value) ? null : value.trim();
     }
 
     private boolean isBlank(String value) {

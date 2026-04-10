@@ -18,9 +18,9 @@ export function Login() {
 
     try {
       await login({ email, password })
-      navigate('/dashboard', { replace: true })
+      navigate('/', { replace: true })
     } catch {
-      setError('Invalid credentials. Use manager@fleetcontrol.dev / password123.')
+      setError('Invalid credentials. Please verify your email and password.')
     } finally {
       setIsSubmitting(false)
     }
@@ -33,7 +33,7 @@ export function Login() {
           <PageHeader
             eyebrow="Secure access"
             title="Sign in to the fleet management portal"
-            description="Sign in with the seeded operations account to access the live fleet workspace."
+            description="Authenticate with a provisioned operations account to access the live fleet workspace."
           />
           <div className="pill-list">
             <span className="pill">Role-based dashboard access</span>
@@ -44,7 +44,7 @@ export function Login() {
         <form className="login-card__form" onSubmit={handleSubmit}>
           <div>
             <h2>Welcome back</h2>
-            <p>Use the seeded operator account to enter the live fleet workspace.</p>
+            <p>Use your assigned account to enter the fleet workspace.</p>
           </div>
           <label className="input-group">
             <span>Email</span>
@@ -59,7 +59,7 @@ export function Login() {
             />
           </label>
           <div className="login-hint">
-            Demo credentials: <strong>manager@fleetcontrol.dev</strong> / <strong>password123</strong>
+            Default seeded account: <strong>manager@fleetcontrol.dev</strong> / <strong>password123</strong>
           </div>
           {error ? <div className="form-error">{error}</div> : null}
           <button className="primary-button" disabled={isSubmitting} type="submit">

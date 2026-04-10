@@ -2,6 +2,8 @@ package com.fleet.modules.profile.service;
 
 import com.fleet.modules.auth.entity.AppUser;
 import com.fleet.modules.auth.repository.AppUserRepository;
+import com.fleet.modules.auth.service.AuthSessionService;
+import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.audit.service.AuditLogService;
 import com.fleet.modules.profile.dto.ChangePasswordRequest;
 import com.fleet.modules.profile.dto.ProfileDTO;
@@ -17,48 +19,54 @@ import org.springframework.web.server.ResponseStatusException;
 public class ProfileService {
 
     private final AppUserRepository appUserRepository;
+    private final CurrentUserService currentUserService;
+    private final AuthSessionService authSessionService;
     private final PasswordEncoder passwordEncoder;
     private final AuditLogService auditLogService;
 
     public ProfileService(
         AppUserRepository appUserRepository,
+        CurrentUserService currentUserService,
+        AuthSessionService authSessionService,
         PasswordEncoder passwordEncoder,
         AuditLogService auditLogService
     ) {
         this.appUserRepository = appUserRepository;
+        this.currentUserService = currentUserService;
+        this.authSessionService = authSessionService;
         this.passwordEncoder = passwordEncoder;
         this.auditLogService = auditLogService;
     }
 
     public ProfileDTO getProfile() {
-        return toDto(getPrimaryUser());
+        return toDto(currentUserService.getRequiredUser());
     }
 
     public ProfileDTO updateProfile(UpdateProfileRequest request) {
-        AppUser user = getPrimaryUser();
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Profile update request is required.");
+        }
+
+        AppUser user = currentUserService.getRequiredUser();
         String previousName = user.getName();
-        String previousRole = user.getRole();
         String previousEmail = user.getEmail();
         String previousRegion = user.getAssignedRegion();
         user.setName(request.name());
-        user.setRole(request.role());
         user.setEmail(request.email());
         user.setAssignedRegion(request.assignedRegion());
         AppUser saved = appUserRepository.save(user);
 
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "PROFILE_UPDATED",
             "APP_USER",
             saved.getId(),
             "Profile details updated.",
             details(
                 "previousName", previousName,
-                "previousRole", previousRole,
                 "previousEmail", previousEmail,
                 "previousRegion", previousRegion,
                 "name", saved.getName(),
-                "role", saved.getRole(),
                 "email", saved.getEmail(),
                 "assignedRegion", saved.getAssignedRegion()
             )
@@ -85,27 +93,22 @@ public class ProfileService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be at least 8 characters.");
         }
 
-        AppUser user = getPrimaryUser();
+        AppUser user = currentUserService.getRequiredUser();
         if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Current password is incorrect.");
         }
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         appUserRepository.save(user);
+        authSessionService.revokeSessionsForUser(user.getId());
 
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "PASSWORD_CHANGED",
             "APP_USER",
             user.getId(),
             "Profile password changed."
         );
-    }
-
-    private AppUser getPrimaryUser() {
-        return appUserRepository.findAll().stream()
-            .findFirst()
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found."));
     }
 
     private ProfileDTO toDto(AppUser user) {

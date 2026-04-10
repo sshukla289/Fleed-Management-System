@@ -11,6 +11,7 @@ import com.fleet.modules.analytics.dto.TripAnalyticsRowDTO;
 import com.fleet.modules.analytics.dto.VehicleAnalyticsDTO;
 import com.fleet.modules.analytics.dto.VehicleAnalyticsRowDTO;
 import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.entity.DriverDutyStatus;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.maintenance.dto.MaintenanceScheduleDTO;
 import com.fleet.modules.maintenance.entity.MaintenanceScheduleStatus;
@@ -21,6 +22,7 @@ import com.fleet.modules.trip.entity.Trip;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.trip.repository.TripRepository;
 import com.fleet.modules.vehicle.entity.Vehicle;
+import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -146,7 +148,7 @@ public class OperationalAnalyticsService {
                     vehicle.getStatus(),
                     vehicle.getLocation(),
                     vehicle.getMileage(),
-                    blockingSchedule != null || "Maintenance".equalsIgnoreCase(vehicle.getStatus()),
+                    blockingSchedule != null || isVehicleInMaintenance(vehicle.getStatus()),
                     vehicleTrips.size(),
                     (int) completedTrips,
                     (int) activeTrips,
@@ -168,7 +170,7 @@ public class OperationalAnalyticsService {
                 Collectors.counting()
             ));
 
-        int availableVehicles = (int) rows.stream().filter(row -> !row.maintenanceDue() && !"Maintenance".equalsIgnoreCase(row.status())).count();
+        int availableVehicles = (int) rows.stream().filter(row -> !row.maintenanceDue() && !isVehicleInMaintenance(row.status())).count();
         int blockedVehicles = rows.size() - availableVehicles;
 
         return new VehicleAnalyticsDTO(
@@ -232,7 +234,7 @@ public class OperationalAnalyticsService {
             endDate,
             List.of(
                 new DashboardKpiDTO("driver-count", "Drivers", String.valueOf(rows.size()), "Registered drivers in the fleet", "blue"),
-                new DashboardKpiDTO("on-duty", "On duty", String.valueOf(rows.stream().filter(row -> "On Duty".equalsIgnoreCase(row.status())).count()), "Drivers ready for live work", "mint"),
+                new DashboardKpiDTO("on-duty", "On duty", String.valueOf(rows.stream().filter(row -> isDriverOnDuty(row.status())).count()), "Drivers ready for live work", "mint"),
                 new DashboardKpiDTO("avg-hours", "Avg hours", String.format(Locale.ROOT, "%.1f h", rows.stream().mapToDouble(DriverAnalyticsRowDTO::hoursDrivenToday).average().orElse(0.0)), "Today's duty load", "amber"),
                 new DashboardKpiDTO("avg-productivity", "Productivity", formatPercent(averageProductivity), "Completed trips versus assigned trips", "teal")
             ),
@@ -424,5 +426,21 @@ public class OperationalAnalyticsService {
 
     private LocalDateTime now() {
         return LocalDateTime.now();
+    }
+
+    private boolean isDriverOnDuty(String value) {
+        try {
+            return DriverDutyStatus.fromValue(value) == DriverDutyStatus.ON_DUTY;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
+    private boolean isVehicleInMaintenance(String value) {
+        try {
+            return VehicleOperationalStatus.fromValue(value) == VehicleOperationalStatus.MAINTENANCE;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 }

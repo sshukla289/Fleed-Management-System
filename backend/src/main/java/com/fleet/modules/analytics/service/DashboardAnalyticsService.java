@@ -15,6 +15,7 @@ import com.fleet.modules.analytics.dto.DashboardTripDelayDTO;
 import com.fleet.modules.compliance.dto.ComplianceCheckResultDTO;
 import com.fleet.modules.compliance.service.ComplianceService;
 import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.entity.DriverDutyStatus;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.maintenance.entity.MaintenanceSchedule;
 import com.fleet.modules.maintenance.entity.MaintenanceScheduleStatus;
@@ -23,6 +24,7 @@ import com.fleet.modules.trip.entity.Trip;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.trip.repository.TripRepository;
 import com.fleet.modules.vehicle.entity.Vehicle;
+import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -106,7 +108,7 @@ public class DashboardAnalyticsService {
         int availableVehicles = (int) vehicles.stream()
             .filter(vehicle -> !isVehicleBlocked(vehicle, blockingScheduleByVehicle))
             .count();
-        int driversOnDuty = (int) drivers.stream().filter(driver -> "On Duty".equalsIgnoreCase(driver.getStatus())).count();
+        int driversOnDuty = (int) drivers.stream().filter(driver -> isDriverOnDuty(driver.getStatus())).count();
         double readinessPercent = vehicles.isEmpty()
             ? 0.0
             : Math.round((availableVehicles * 1000.0 / vehicles.size())) / 10.0;
@@ -310,7 +312,7 @@ public class DashboardAnalyticsService {
 
     private List<DashboardResourceDTO> getDriversOnDutySnapshot(List<Driver> drivers) {
         return drivers.stream()
-            .filter(driver -> "On Duty".equalsIgnoreCase(driver.getStatus()))
+            .filter(driver -> isDriverOnDuty(driver.getStatus()))
             .sorted(Comparator.comparing(Driver::getName))
             .limit(5)
             .map(driver -> new DashboardResourceDTO(
@@ -431,7 +433,7 @@ public class DashboardAnalyticsService {
             return true;
         }
 
-        if ("Maintenance".equalsIgnoreCase(vehicle.getStatus())) {
+        if (isVehicleInMaintenance(vehicle.getStatus())) {
             return true;
         }
 
@@ -497,5 +499,21 @@ public class DashboardAnalyticsService {
             case "LOW" -> 3;
             default -> 99;
         };
+    }
+
+    private boolean isDriverOnDuty(String value) {
+        try {
+            return DriverDutyStatus.fromValue(value) == DriverDutyStatus.ON_DUTY;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
+    private boolean isVehicleInMaintenance(String value) {
+        try {
+            return VehicleOperationalStatus.fromValue(value) == VehicleOperationalStatus.MAINTENANCE;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 }

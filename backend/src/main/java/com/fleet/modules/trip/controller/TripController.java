@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,41 +34,49 @@ public class TripController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<List<TripDTO>> getTrips() {
         return ResponseEntity.ok(tripService.getTrips());
     }
 
     @GetMapping("/{tripId}")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<TripDTO> getTrip(@PathVariable String tripId) {
         return ResponseEntity.ok(tripService.getTripById(tripId));
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<TripDTO> createTrip(@Valid @RequestBody CreateTripRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(tripService.createTrip(request));
     }
 
     @PostMapping("/{tripId}/validate")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<TripValidationResultDTO> validateTrip(@PathVariable String tripId) {
         return ResponseEntity.ok(tripService.validateTrip(tripId));
     }
 
     @PostMapping("/{tripId}/optimize")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<TripOptimizationResultDTO> optimizeTrip(@PathVariable String tripId) {
         return ResponseEntity.ok(tripService.optimizeTrip(tripId));
     }
 
     @PostMapping("/{tripId}/dispatch")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<TripDTO> dispatchTrip(@PathVariable String tripId) {
         return ResponseEntity.ok(tripService.dispatchTrip(tripId));
     }
 
     @PostMapping("/{tripId}/start")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','DRIVER')")
     public ResponseEntity<TripDTO> startTrip(@PathVariable String tripId) {
         return ResponseEntity.ok(tripService.startTrip(tripId));
     }
 
     @PostMapping("/{tripId}/complete")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','DRIVER')")
     public ResponseEntity<TripDTO> completeTrip(
         @PathVariable String tripId,
         @Valid @RequestBody CompleteTripRequest request
@@ -76,6 +85,7 @@ public class TripController {
     }
 
     @PostMapping("/{tripId}/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
     public ResponseEntity<TripDTO> cancelTrip(
         @PathVariable String tripId,
         @RequestParam(required = false) String reason
@@ -84,6 +94,7 @@ public class TripController {
     }
 
     @GetMapping("/{tripId}/telemetry")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<List<TelemetryDTO>> getTripTelemetry(@PathVariable String tripId) {
         return ResponseEntity.ok(telemetryService.getTelemetryByTripId(tripId));
     }

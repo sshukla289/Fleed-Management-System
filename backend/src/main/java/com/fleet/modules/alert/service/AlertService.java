@@ -6,6 +6,7 @@ import com.fleet.modules.alert.entity.Alert;
 import com.fleet.modules.alert.entity.AlertCategory;
 import com.fleet.modules.alert.entity.AlertLifecycleStatus;
 import com.fleet.modules.alert.entity.AlertSeverity;
+import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.alert.repository.AlertRepository;
 import com.fleet.modules.audit.service.AuditLogService;
 import com.fleet.modules.notification.service.NotificationService;
@@ -31,15 +32,18 @@ public class AlertService {
     private final AlertRepository alertRepository;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final CurrentUserService currentUserService;
 
     public AlertService(
         AlertRepository alertRepository,
         NotificationService notificationService,
-        AuditLogService auditLogService
+        AuditLogService auditLogService,
+        CurrentUserService currentUserService
     ) {
         this.alertRepository = alertRepository;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
+        this.currentUserService = currentUserService;
     }
 
     public List<AlertDTO> getAlerts() {
@@ -78,7 +82,7 @@ public class AlertService {
         Alert saved = alertRepository.save(alert);
         maybeNotifyCritical(saved);
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "ALERT_CREATED",
             "ALERT",
             saved.getId(),
@@ -107,7 +111,7 @@ public class AlertService {
         alert.setUpdatedAt(LocalDateTime.now());
         Alert saved = alertRepository.save(alert);
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "ALERT_ACKNOWLEDGED",
             "ALERT",
             saved.getId(),
@@ -133,7 +137,7 @@ public class AlertService {
         alert.setUpdatedAt(LocalDateTime.now());
         Alert saved = alertRepository.save(alert);
         auditLogService.record(
-            "system",
+            currentUserService.getCurrentActor(),
             "ALERT_RESOLVED",
             "ALERT",
             saved.getId(),

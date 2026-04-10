@@ -1,4 +1,10 @@
 export type VehicleStatus = 'Active' | 'Idle' | 'Maintenance'
+export type AppRole =
+  | 'ADMIN'
+  | 'FLEET_MANAGER'
+  | 'DISPATCHER_PLANNER'
+  | 'MAINTENANCE_MANAGER'
+  | 'DRIVER'
 export type TripStatus = 'DRAFT' | 'VALIDATED' | 'OPTIMIZED' | 'DISPATCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'BLOCKED'
 export type TripPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type TripDispatchStatus = 'NOT_DISPATCHED' | 'QUEUED' | 'DISPATCHED' | 'RELEASED'
@@ -447,7 +453,7 @@ export type UpdateRoutePlanInput = CreateRoutePlanInput
 export interface UserProfile {
   id: string
   name: string
-  role: string
+  role: AppRole
   email: string
   assignedRegion: string
 }

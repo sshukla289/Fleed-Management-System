@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { MapView } from '../components/MapView'
 import { PageHeader } from '../components/PageHeader'
+import { useAuth } from '../context/useAuth'
+import { canManageTrips, canOperateTripExecution } from '../security/permissions'
 import {
   completeTrip,
   createTrip,
@@ -100,6 +102,7 @@ function buildCompletionForm(trip?: Trip | null): CompleteTripInput {
 }
 
 export function Trips() {
+  const { session } = useAuth()
   const [trips, setTrips] = useState<Trip[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [drivers, setDrivers] = useState<Driver[]>([])
@@ -241,6 +244,9 @@ export function Trips() {
   const blockedTrips = trips.filter((trip) => trip.status === 'BLOCKED').length
   const completedTrips = trips.filter((trip) => trip.status === 'COMPLETED').length
   const actionQueue = trips.filter((trip) => ['DRAFT', 'VALIDATED', 'OPTIMIZED', 'DISPATCHED', 'IN_PROGRESS'].includes(trip.status))
+  const role = session?.profile.role
+  const canPlanTrips = canManageTrips(role)
+  const canExecuteTrips = canOperateTripExecution(role)
 
   return (
     <div className="page-shell">
@@ -281,6 +287,7 @@ export function Trips() {
             </div>
           </div>
 
+          {canPlanTrips ? (
           <form className="trip-form" onSubmit={handleCreateTrip}>
             <label>
               <span>Route</span>
@@ -442,6 +449,9 @@ export function Trips() {
               </button>
             </div>
           </form>
+          ) : (
+            <div className="notice">Trip planning actions are restricted for your current role.</div>
+          )}
         </section>
 
         <section className="panel">
@@ -565,20 +575,21 @@ export function Trips() {
             </div>
 
             <div className="trip-detail__actions">
-              <button className="secondary-button" disabled={working} onClick={() => void handleTripAction(() => validateTrip(selectedTrip.tripId), 'Trip validated.') } type="button">
+              <button className="secondary-button" disabled={working || !canPlanTrips} onClick={() => void handleTripAction(() => validateTrip(selectedTrip.tripId), 'Trip validated.') } type="button">
                 Validate
               </button>
-              <button className="secondary-button" disabled={working} onClick={() => void handleTripAction(() => optimizeTrip(selectedTrip.tripId), 'Trip optimized.') } type="button">
+              <button className="secondary-button" disabled={working || !canPlanTrips} onClick={() => void handleTripAction(() => optimizeTrip(selectedTrip.tripId), 'Trip optimized.') } type="button">
                 Optimize
               </button>
-              <button className="secondary-button" disabled={working} onClick={() => void handleTripAction(() => dispatchTrip(selectedTrip.tripId), 'Trip dispatched.') } type="button">
+              <button className="secondary-button" disabled={working || !canPlanTrips} onClick={() => void handleTripAction(() => dispatchTrip(selectedTrip.tripId), 'Trip dispatched.') } type="button">
                 Dispatch
               </button>
-              <button className="secondary-button" disabled={working} onClick={() => void handleTripAction(() => startTrip(selectedTrip.tripId), 'Trip started.') } type="button">
+              <button className="secondary-button" disabled={working || !canExecuteTrips} onClick={() => void handleTripAction(() => startTrip(selectedTrip.tripId), 'Trip started.') } type="button">
                 Start
               </button>
             </div>
 
+            {canExecuteTrips ? (
             <form
               className="trip-completion"
               onSubmit={(event) => {
@@ -649,6 +660,7 @@ export function Trips() {
                 Complete trip
               </button>
             </form>
+            ) : null}
           </section>
         </div>
       ) : null}
