@@ -28,7 +28,7 @@ public class DriverController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<List<DriverDTO>> getDrivers() {
         return ResponseEntity.ok(driverService.getDrivers());
     }

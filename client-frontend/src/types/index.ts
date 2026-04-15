@@ -1,10 +1,11 @@
 export type VehicleStatus = 'Active' | 'Idle' | 'Maintenance'
 export type AppRole =
   | 'ADMIN'
-  | 'FLEET_MANAGER'
-  | 'DISPATCHER_PLANNER'
-  | 'MAINTENANCE_MANAGER'
   | 'DRIVER'
+  | 'DISPATCHER'
+  | 'PLANNER'
+  | 'OPERATIONS_MANAGER'
+  | 'MAINTENANCE_MANAGER'
 export type TripStatus = 'DRAFT' | 'VALIDATED' | 'OPTIMIZED' | 'DISPATCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'BLOCKED'
 export type TripPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type TripDispatchStatus = 'NOT_DISPATCHED' | 'QUEUED' | 'DISPATCHED' | 'RELEASED'
@@ -138,6 +139,8 @@ export interface CreateTripInput {
   priority: TripPriority
   remarks?: string
 }
+
+export type UpdateTripInput = Partial<CreateTripInput>
 
 export interface CompleteTripInput {
   actualEndTime: string

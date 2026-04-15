@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { MapView } from '../components/MapView'
-import { PageHeader } from '../components/PageHeader'
 import { useAuth } from '../context/useAuth'
 import { canManageTrips, canOperateTripExecution } from '../security/permissions'
 import {
   completeTrip,
   createTrip,
   dispatchTrip,
+  fetchAlerts,
   fetchDrivers,
   fetchComplianceCheck,
   fetchRoutePlans,
@@ -19,6 +19,7 @@ import {
   validateTrip,
 } from '../services/apiService'
 import type {
+  Alert,
   CompleteTripInput,
   CreateTripInput,
   Driver,
@@ -56,38 +57,35 @@ const initialCompletionForm: CompleteTripInput = {
 function statusClass(status: Trip['status']) {
   switch (status) {
     case 'COMPLETED':
-      return 'status-pill status-pill--mint'
+      return 'dd-pill dd-pill--green'
     case 'DISPATCHED':
     case 'IN_PROGRESS':
-      return 'status-pill status-pill--blue'
+      return 'dd-pill dd-pill--blue'
     case 'VALIDATED':
     case 'OPTIMIZED':
-      return 'status-pill status-pill--violet'
+      return 'dd-pill dd-pill--violet'
     case 'BLOCKED':
-      return 'status-pill status-pill--rose'
+      return 'dd-pill dd-pill--red'
     default:
-      return 'status-pill status-pill--amber'
+      return 'dd-pill dd-pill--amber'
   }
 }
 
 function priorityTone(priority: TripPriority) {
   switch (priority) {
     case 'CRITICAL':
-      return 'status-pill status-pill--rose'
+      return 'dd-pill dd-pill--red'
     case 'HIGH':
-      return 'status-pill status-pill--amber'
+      return 'dd-pill dd-pill--amber'
     case 'MEDIUM':
-      return 'status-pill status-pill--blue'
+      return 'dd-pill dd-pill--blue'
     default:
-      return 'status-pill status-pill--mint'
+      return 'dd-pill dd-pill--green'
   }
 }
 
 function formatDateTime(value?: string | null) {
-  if (!value) {
-    return 'Pending'
-  }
-
+  if (!value) return '—'
   return new Date(value).toLocaleString()
 }
 
@@ -101,6 +99,43 @@ function buildCompletionForm(trip?: Trip | null): CompleteTripInput {
   }
 }
 
+/* ── Determine active stop index from trip status ── */
+function getActiveStopIndex(trip: Trip): number {
+  if (trip.status === 'COMPLETED') return trip.stops.length - 1
+  if (trip.status === 'IN_PROGRESS') return Math.min(1, trip.stops.length - 1)
+  if (trip.status === 'DISPATCHED') return 0
+  return -1
+}
+
+interface ChecklistState {
+  pickupCompleted: boolean
+  documentsVerified: boolean
+  deliveryCompleted: boolean
+}
+
+/* ── Persist checklist per trip in localStorage ── */
+const CHECKLIST_STORAGE_KEY = 'fleet:trip-checklists'
+
+function loadChecklist(tripId: string): ChecklistState {
+  try {
+    const raw = localStorage.getItem(CHECKLIST_STORAGE_KEY)
+    if (!raw) return { pickupCompleted: false, documentsVerified: false, deliveryCompleted: false }
+    const all = JSON.parse(raw) as Record<string, ChecklistState>
+    return all[tripId] ?? { pickupCompleted: false, documentsVerified: false, deliveryCompleted: false }
+  } catch {
+    return { pickupCompleted: false, documentsVerified: false, deliveryCompleted: false }
+  }
+}
+
+function saveChecklist(tripId: string, state: ChecklistState) {
+  try {
+    const raw = localStorage.getItem(CHECKLIST_STORAGE_KEY)
+    const all = raw ? (JSON.parse(raw) as Record<string, ChecklistState>) : {}
+    all[tripId] = state
+    localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(all))
+  } catch { /* ignore storage errors */ }
+}
+
 export function Trips() {
   const { session } = useAuth()
   const [trips, setTrips] = useState<Trip[]>([])
@@ -110,11 +145,17 @@ export function Trips() {
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [telemetry, setTelemetry] = useState<TripTelemetryPoint[]>([])
   const [complianceCheck, setComplianceCheck] = useState<ComplianceCheckResult | null>(null)
+  const [systemAlerts, setSystemAlerts] = useState<Alert[]>([])
   const [plannerForm, setPlannerForm] = useState<CreateTripInput>(initialPlannerForm)
   const [completionForm, setCompletionForm] = useState<CompleteTripInput>(initialCompletionForm)
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [checklist, setChecklist] = useState<ChecklistState>({
+    pickupCompleted: false,
+    documentsVerified: false,
+    deliveryCompleted: false,
+  })
 
   const selectedTrip = useMemo(
     () => trips.find((trip) => trip.tripId === selectedTripId) ?? trips[0] ?? null,
@@ -124,27 +165,17 @@ export function Trips() {
   async function loadBoard() {
     setLoading(true)
     setMessage(null)
-
     try {
       const [tripData, vehicleData, driverData, routeData] = await Promise.all([
-        fetchTrips(),
-        fetchVehicles(),
-        fetchDrivers(),
-        fetchRoutePlans(),
+        fetchTrips(), fetchVehicles(), fetchDrivers(), fetchRoutePlans(),
       ])
-
       setTrips(tripData)
       setVehicles(vehicleData)
       setDrivers(driverData)
       setRoutes(routeData)
-
       setSelectedTripId((current) => current ?? tripData[0]?.tripId ?? null)
-
       setPlannerForm((current) => {
-        if (current.routeId) {
-          return current
-        }
-
+        if (current.routeId) return current
         const initialRoute = routeData[0]
         return {
           ...current,
@@ -166,33 +197,53 @@ export function Trips() {
   }
 
   async function loadTelemetry(tripId?: string | null) {
-    if (!tripId) {
-      setTelemetry([])
-      setComplianceCheck(null)
-      return
-    }
-
+    if (!tripId) { setTelemetry([]); setComplianceCheck(null); setSystemAlerts([]); return }
     try {
-      const [telemetryResult, complianceResult] = await Promise.allSettled([
+      const [telemetryResult, complianceResult, alertsResult] = await Promise.allSettled([
         fetchTripTelemetry(tripId),
         fetchComplianceCheck(tripId),
+        fetchAlerts(),
       ])
-
       setTelemetry(telemetryResult.status === 'fulfilled' ? telemetryResult.value : [])
       setComplianceCheck(complianceResult.status === 'fulfilled' ? complianceResult.value : null)
-    } catch {
-      setTelemetry([])
-      setComplianceCheck(null)
-    }
+      // Filter system alerts related to this trip
+      if (alertsResult.status === 'fulfilled') {
+        const tripAlerts = alertsResult.value.filter(
+          (a) => a.relatedTripId === tripId && a.status !== 'RESOLVED' && a.status !== 'CLOSED'
+        )
+        setSystemAlerts(tripAlerts)
+      } else {
+        setSystemAlerts([])
+      }
+    } catch { setTelemetry([]); setComplianceCheck(null); setSystemAlerts([]) }
   }
 
+  useEffect(() => { void loadBoard() }, [])
+
+  // Auto-dismiss toast messages after 5 seconds
   useEffect(() => {
-    void loadBoard()
-  }, [])
+    if (!message) return
+    const timer = setTimeout(() => setMessage(null), 5000)
+    return () => clearTimeout(timer)
+  }, [message])
 
   useEffect(() => {
     void loadTelemetry(selectedTrip?.tripId ?? null)
     setCompletionForm(buildCompletionForm(selectedTrip))
+    // Restore persisted checklist or auto-complete for finished trips
+    if (selectedTrip?.status === 'COMPLETED') {
+      setChecklist({ pickupCompleted: true, documentsVerified: true, deliveryCompleted: true })
+    } else if (selectedTrip) {
+      setChecklist(loadChecklist(selectedTrip.tripId))
+    } else {
+      setChecklist({ pickupCompleted: false, documentsVerified: false, deliveryCompleted: false })
+    }
+
+    // Auto-poll telemetry every 15s for active trips
+    if (selectedTrip && ['IN_PROGRESS', 'DISPATCHED'].includes(selectedTrip.status)) {
+      const interval = setInterval(() => { void loadTelemetry(selectedTrip.tripId) }, 15000)
+      return () => clearInterval(interval)
+    }
   }, [selectedTrip])
 
   async function refreshBoard(nextSelectedTripId?: string | null) {
@@ -205,45 +256,32 @@ export function Trips() {
     event.preventDefault()
     setWorking(true)
     setMessage(null)
-
     try {
-      const createdTrip = await createTrip({
-        ...plannerForm,
-        stops: plannerForm.stops,
-      })
+      const createdTrip = await createTrip({ ...plannerForm, stops: plannerForm.stops })
       await refreshBoard(createdTrip.tripId)
       setMessage(`Created trip ${createdTrip.tripId}.`)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to create trip.')
-    } finally {
-      setWorking(false)
-    }
+    } finally { setWorking(false) }
   }
 
   async function handleTripAction(action: () => Promise<unknown>, successMessage: string) {
-    if (!selectedTrip) {
-      return
-    }
-
+    if (!selectedTrip) return
     setWorking(true)
     setMessage(null)
-
     try {
       await action()
       await refreshBoard(selectedTrip.tripId)
       setMessage(successMessage)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Trip action failed.')
-    } finally {
-      setWorking(false)
-    }
+    } finally { setWorking(false) }
   }
 
   const totalTrips = trips.length
-  const activeTrips = trips.filter((trip) => trip.status === 'DISPATCHED' || trip.status === 'IN_PROGRESS').length
-  const blockedTrips = trips.filter((trip) => trip.status === 'BLOCKED').length
-  const completedTrips = trips.filter((trip) => trip.status === 'COMPLETED').length
-  const actionQueue = trips.filter((trip) => ['DRAFT', 'VALIDATED', 'OPTIMIZED', 'DISPATCHED', 'IN_PROGRESS'].includes(trip.status))
+  const activeTrips = trips.filter((t) => t.status === 'DISPATCHED' || t.status === 'IN_PROGRESS').length
+  const blockedTrips = trips.filter((t) => t.status === 'BLOCKED').length
+  const completedTrips = trips.filter((t) => t.status === 'COMPLETED').length
   const role = session?.profile.role
   const canPlanTrips = canManageTrips(role)
   const canExecuteTrips = canOperateTripExecution(role)
@@ -252,502 +290,255 @@ export function Trips() {
   const canDispatchSelectedTrip = selectedTrip ? ['DRAFT', 'VALIDATED', 'OPTIMIZED', 'BLOCKED'].includes(selectedTrip.status) : false
   const canStartSelectedTrip = selectedTrip?.status === 'DISPATCHED'
   const canCompleteSelectedTrip = selectedTrip?.status === 'IN_PROGRESS'
+  const checklistCount = Object.values(checklist).filter(Boolean).length
+
+  // Persist checklist changes to localStorage
+  function updateChecklist(key: keyof ChecklistState) {
+    setChecklist((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      if (selectedTrip) saveChecklist(selectedTrip.tripId, next)
+      return next
+    })
+  }
+
+  const timelineSteps = selectedTrip
+    ? [
+        { label: 'Assigned', time: formatDateTime(selectedTrip.plannedStartTime), done: true },
+        { label: 'Dispatched', time: selectedTrip.dispatchStatus !== 'NOT_DISPATCHED' ? 'Confirmed' : 'Pending', done: ['DISPATCHED', 'RELEASED'].includes(selectedTrip.dispatchStatus) },
+        { label: 'In Transit', time: formatDateTime(selectedTrip.actualStartTime), done: ['IN_PROGRESS', 'COMPLETED'].includes(selectedTrip.status) },
+        { label: 'Delivered', time: formatDateTime(selectedTrip.actualEndTime), done: selectedTrip.status === 'COMPLETED' },
+      ]
+    : []
+
+  const activeStopIdx = selectedTrip ? getActiveStopIndex(selectedTrip) : -1
+  const alertCount = (complianceCheck?.warnings.length ?? 0) + (complianceCheck?.blockingReasons.length ?? 0) + systemAlerts.length + ((selectedTrip && (selectedTrip.delayMinutes ?? 0) > 0) ? 1 : 0)
+  const hasAlerts = alertCount > 0
 
   return (
-    <div className="page-shell">
-      <PageHeader
-        eyebrow="Workflow control"
-        title="Trips"
-        description="Plan, validate, optimize, dispatch, and monitor trip lifecycles from one control board."
-        actionLabel="Refresh board"
-        actionDisabled={working || loading}
-        onAction={() => {
-          void loadBoard()
-        }}
-      />
+    <div className="dd">
+      {/* ── Stat strip (replaces duplicate title) ── */}
+      <div className="dd-topbar">
+        <div className="dd-stats-row">
+          <div className="dd-stat"><span className="dd-stat__n" style={{ color: '#253B80' }}>{totalTrips}</span><span className="dd-stat__l">Trips</span></div>
+          <div className="dd-stat"><span className="dd-stat__n" style={{ color: '#10b981' }}>{activeTrips}</span><span className="dd-stat__l">Active</span></div>
+          <div className="dd-stat"><span className="dd-stat__n" style={{ color: '#ef4444' }}>{blockedTrips}</span><span className="dd-stat__l">Blocked</span></div>
+          <div className="dd-stat"><span className="dd-stat__n" style={{ color: '#0ea5e9' }}>{completedTrips}</span><span className="dd-stat__l">Done</span></div>
+        </div>
+        <button className="dd-btn dd-btn--ghost" disabled={working || loading} onClick={() => { void refreshBoard() }} type="button">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
+          Refresh
+        </button>
+      </div>
 
-      {message ? <div className="notice">{message}</div> : null}
+      {message && <div className="dd-toast">{message}</div>}
 
-      <section className="dashboard-stats">
-        {[
-          { label: 'Trips', value: totalTrips, note: 'Registered lifecycle records' },
-          { label: 'Active', value: activeTrips, note: 'Dispatched or in motion' },
-          { label: 'Blocked', value: blockedTrips, note: 'Validation or compliance holds' },
-          { label: 'Completed', value: completedTrips, note: 'Closed trips awaiting analytics' },
-        ].map((stat) => (
-          <article key={stat.label} className="stat-card">
-            <span>{stat.label}</span>
-            <strong>{stat.value}</strong>
-            <small>{stat.note}</small>
-          </article>
-        ))}
-      </section>
-
-      <div className="dashboard-grid dashboard-grid--trips">
-        <section className="panel">
-          <div className="panel__header">
-            <div>
-              <h3>Trip planner</h3>
-              <p className="muted">Create or import a trip, then validate it against vehicle, driver, and maintenance rules.</p>
+      {/* ═══════ HERO — Active Trip ═══════ */}
+      {selectedTrip && (
+        <section className="dd-hero">
+          <div className="dd-hero__top">
+            <div className="dd-hero__badges">
+              <span className={statusClass(selectedTrip.status)}>{selectedTrip.status.replace('_', ' ')}</span>
+              <span className={priorityTone(selectedTrip.priority)}>{selectedTrip.priority}</span>
+              <code className="dd-hero__code">{selectedTrip.tripId}</code>
+            </div>
+            <div className="dd-hero__row">
+              <div className="dd-hero__route">
+                <div className="dd-endpoint dd-endpoint--origin">
+                  <div className="dd-endpoint__dot" />
+                  <div><small>ORIGIN</small><strong>{selectedTrip.source}</strong></div>
+                </div>
+                <div className="dd-route-connector">
+                  <div className="dd-route-connector__line" />
+                  <span className="dd-route-connector__label">{selectedTrip.stops.length} stops · {selectedTrip.actualDistance || selectedTrip.estimatedDistance} km</span>
+                </div>
+                <div className="dd-endpoint dd-endpoint--dest">
+                  <div className="dd-endpoint__dot" />
+                  <div><small>DESTINATION</small><strong>{selectedTrip.destination}</strong></div>
+                </div>
+              </div>
+              <div className="dd-hero__metrics">
+                <div className="dd-metric"><small>Duration</small><strong>{selectedTrip.actualDuration ?? selectedTrip.estimatedDuration}</strong></div>
+                <div className="dd-metric"><small>Vehicle</small><strong>{selectedTrip.assignedVehicleId}</strong></div>
+                <div className="dd-metric"><small>Driver</small><strong>{selectedTrip.assignedDriverId}</strong></div>
+              </div>
             </div>
           </div>
-
-          {canPlanTrips ? (
-          <form className="trip-form" onSubmit={handleCreateTrip}>
-            <label>
-              <span>Route</span>
-              <select
-                onChange={(event) => {
-                  const route = routes.find((item) => item.id === event.target.value)
-                  setPlannerForm({
-                    ...plannerForm,
-                    routeId: event.target.value,
-                    source: route?.stops[0] ?? plannerForm.source,
-                    destination: route?.stops.at(-1) ?? plannerForm.destination,
-                    stops: route?.stops ?? plannerForm.stops,
-                    estimatedDistance: route?.distanceKm ?? plannerForm.estimatedDistance,
-                    estimatedDuration: route?.estimatedDuration ?? plannerForm.estimatedDuration,
-                  })
-                }}
-                value={plannerForm.routeId}
-              >
-                <option value="">Select route</option>
-                {routes.map((route) => (
-                  <option key={route.id} value={route.id}>
-                    {route.id} - {route.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span>Vehicle</span>
-              <select
-                onChange={(event) => setPlannerForm({ ...plannerForm, assignedVehicleId: event.target.value })}
-                value={plannerForm.assignedVehicleId}
-              >
-                <option value="">Select vehicle</option>
-                {vehicles.map((vehicle) => (
-                  <option key={vehicle.id} value={vehicle.id}>
-                    {vehicle.id} - {vehicle.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span>Driver</span>
-              <select
-                onChange={(event) => setPlannerForm({ ...plannerForm, assignedDriverId: event.target.value })}
-                value={plannerForm.assignedDriverId}
-              >
-                <option value="">Select driver</option>
-                {drivers.map((driver) => (
-                  <option key={driver.id} value={driver.id}>
-                    {driver.id} - {driver.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span>Priority</span>
-              <select
-                onChange={(event) =>
-                  setPlannerForm({ ...plannerForm, priority: event.target.value as TripPriority })
-                }
-                value={plannerForm.priority}
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-                <option value="CRITICAL">Critical</option>
-              </select>
-            </label>
-
-            <label>
-              <span>Source</span>
-              <input
-                onChange={(event) => setPlannerForm({ ...plannerForm, source: event.target.value })}
-                type="text"
-                value={plannerForm.source}
-              />
-            </label>
-
-            <label>
-              <span>Destination</span>
-              <input
-                onChange={(event) => setPlannerForm({ ...plannerForm, destination: event.target.value })}
-                type="text"
-                value={plannerForm.destination}
-              />
-            </label>
-
-            <label className="trip-form__wide">
-              <span>Stops</span>
-              <textarea
-                onChange={(event) =>
-                  setPlannerForm({
-                    ...plannerForm,
-                    stops: event.target.value
-                      .split(',')
-                      .map((stop) => stop.trim())
-                      .filter(Boolean),
-                  })
-                }
-                rows={3}
-                value={plannerForm.stops.join(', ')}
-              />
-            </label>
-
-            <label>
-              <span>Planned start</span>
-              <input
-                onChange={(event) => setPlannerForm({ ...plannerForm, plannedStartTime: event.target.value })}
-                type="datetime-local"
-                value={plannerForm.plannedStartTime}
-              />
-            </label>
-
-            <label>
-              <span>Planned end</span>
-              <input
-                onChange={(event) => setPlannerForm({ ...plannerForm, plannedEndTime: event.target.value })}
-                type="datetime-local"
-                value={plannerForm.plannedEndTime}
-              />
-            </label>
-
-            <label>
-              <span>Estimated distance</span>
-              <input
-                min="0"
-                onChange={(event) =>
-                  setPlannerForm({ ...plannerForm, estimatedDistance: Number(event.target.value) })
-                }
-                type="number"
-                value={plannerForm.estimatedDistance}
-              />
-            </label>
-
-            <label>
-              <span>Estimated duration</span>
-              <input
-                onChange={(event) => setPlannerForm({ ...plannerForm, estimatedDuration: event.target.value })}
-                type="text"
-                value={plannerForm.estimatedDuration}
-              />
-            </label>
-
-            <label className="trip-form__wide">
-              <span>Remarks</span>
-              <textarea
-                onChange={(event) => setPlannerForm({ ...plannerForm, remarks: event.target.value })}
-                rows={3}
-                value={plannerForm.remarks ?? ''}
-              />
-            </label>
-
-            <div className="trip-form__actions">
-              <button className="primary-button" disabled={working} type="submit">
-                {working ? 'Creating...' : 'Create trip'}
+          <div className="dd-hero__actions">
+            {canPlanTrips && (
+              <>
+                <button className="dd-btn dd-btn--secondary" disabled={working || !canValidateSelectedTrip} onClick={() => void handleTripAction(() => validateTrip(selectedTrip.tripId), 'Trip validated.')} type="button">Validate</button>
+                <button className="dd-btn dd-btn--secondary" disabled={working || !canOptimizeSelectedTrip} onClick={() => void handleTripAction(() => optimizeTrip(selectedTrip.tripId), 'Trip optimized.')} type="button">Optimize</button>
+                <button className="dd-btn dd-btn--secondary" disabled={working || !canDispatchSelectedTrip} onClick={() => void handleTripAction(() => dispatchTrip(selectedTrip.tripId), 'Trip dispatched.')} type="button">Dispatch</button>
+              </>
+            )}
+            {canExecuteTrips && (
+              <button className="dd-btn dd-btn--primary" disabled={working || !canStartSelectedTrip} onClick={() => void handleTripAction(() => startTrip(selectedTrip.tripId), 'Trip started.')} type="button">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                Start Trip
               </button>
-            </div>
-          </form>
-          ) : (
-            <div className="notice">Trip planning actions are restricted for your current role.</div>
-          )}
+            )}
+            <button className="dd-btn dd-btn--ghost" type="button" onClick={() => window.open(`https://www.google.com/maps/dir/${encodeURIComponent(selectedTrip.source)}/${selectedTrip.stops.map(s => encodeURIComponent(s)).join('/')}/${encodeURIComponent(selectedTrip.destination)}`, '_blank')}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+              Navigate
+            </button>
+          </div>
         </section>
+      )}
 
-        <section className="panel">
-          <div className="panel__header">
-            <div>
-              <h3>Lifecycle queue</h3>
-              <p className="muted">Trips move left to right through validation, optimization, dispatch, and completion.</p>
+      {/* ═══════ OPERATIONAL GRID ═══════ */}
+      {selectedTrip && (
+        <div className="dd-grid">
+          {/* LEFT — Map + Route + Telemetry */}
+          <div className="dd-grid__main">
+            {/* Map */}
+            <div className="dd-map-wrap">
+              <MapView title={`${selectedTrip.tripId} route`} stops={selectedTrip.stops} />
             </div>
-            <span className="badge">{actionQueue.length} queued</span>
+
+            {/* Route step tracker */}
+            <section className="dd-card">
+              <div className="dd-card__head"><h4>Route</h4><span className="dd-card__sub">{selectedTrip.stops.length} stops</span></div>
+              <div className="dd-route-steps">
+                {selectedTrip.stops.map((stop, idx) => {
+                  const isDone = selectedTrip.status === 'COMPLETED' || idx < activeStopIdx
+                  const isCurrent = idx === activeStopIdx && selectedTrip.status !== 'COMPLETED'
+                  return (
+                    <div key={`${stop}-${idx}`} className={`dd-step${isDone ? ' dd-step--done' : ''}${isCurrent ? ' dd-step--active' : ''}`}>
+                      <div className="dd-step__marker">
+                        <div className="dd-step__dot">
+                          {isDone && <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
+                          {isCurrent && <div className="dd-step__pulse" />}
+                        </div>
+                        {idx < selectedTrip.stops.length - 1 && <div className="dd-step__line" />}
+                      </div>
+                      <div className="dd-step__info">
+                        <strong>{stop}</strong>
+                        <small>{idx === 0 ? 'Origin' : idx === selectedTrip.stops.length - 1 ? 'Destination' : `Stop ${idx}`}</small>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+
+            {/* Telemetry (real data only) */}
+            {telemetry.length > 0 && (
+              <section className="dd-card">
+                <div className="dd-card__head"><h4>Telemetry</h4><span className="dd-card__sub">Last {Math.min(telemetry.length, 4)} readings</span></div>
+                <div className="dd-telem-grid">
+                  {telemetry.slice(-4).map((pt, i) => (
+                    <div key={`${pt.timestamp}-${i}`} className="dd-telem-item">
+                      <strong>{new Date(pt.timestamp).toLocaleTimeString()}</strong>
+                      <span>{Math.round(pt.speed)} km/h</span>
+                      <span>Fuel {Math.round(pt.fuelLevel)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
 
-          <div className="trip-table">
-            <div className="trip-table__head">
-              <span>Trip</span>
-              <span>Status</span>
-              <span>Vehicle / Driver</span>
-              <span>Window</span>
-              <span>Actions</span>
+          {/* RIGHT — Checklist + Timeline + Alerts */}
+          <aside className="dd-grid__side">
+            {/* Checklist */}
+            <div className="dd-block">
+              <h4 className="dd-block__title">Checklist</h4>
+              {([
+                { key: 'pickupCompleted' as const, label: 'Pickup completed' },
+                { key: 'documentsVerified' as const, label: 'Documents verified' },
+                { key: 'deliveryCompleted' as const, label: 'Delivery completed' },
+              ]).map((item) => (
+                <label key={item.key} className={`dd-chk${checklist[item.key] ? ' dd-chk--on' : ''}`}>
+                  <div className="dd-chk__box">
+                    {checklist[item.key] && <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
+                  </div>
+                  <input type="checkbox" hidden checked={checklist[item.key]} onChange={() => updateChecklist(item.key)} />
+                  <span>{item.label}</span>
+                </label>
+              ))}
+              <div className="dd-chk-bar">
+                <div className="dd-chk-bar__track"><div className="dd-chk-bar__fill" style={{ width: `${(checklistCount / 3) * 100}%` }} /></div>
+                <small>{checklistCount}/3</small>
+              </div>
             </div>
 
+            {/* Timeline */}
+            <div className="dd-block">
+              <h4 className="dd-block__title">Timeline</h4>
+              <div className="dd-timeline">
+                {timelineSteps.map((step, i) => (
+                  <div key={step.label} className={`dd-tl${step.done ? ' dd-tl--done' : ''}`}>
+                    <div className="dd-tl__rail">
+                      <div className="dd-tl__dot" />
+                      {i < timelineSteps.length - 1 && <div className="dd-tl__line" />}
+                    </div>
+                    <div className="dd-tl__body"><strong>{step.label}</strong><small>{step.time}</small></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Alerts */}
+            <div className="dd-block">
+              <h4 className="dd-block__title">Alerts {hasAlerts && <span className="dd-block__badge">{alertCount}</span>}</h4>
+              {complianceCheck?.warnings.map((w, i) => (
+                <div key={`w${i}`} className="dd-notif dd-notif--warn">⚠️ {w}</div>
+              ))}
+              {complianceCheck?.blockingReasons.map((r, i) => (
+                <div key={`b${i}`} className="dd-notif dd-notif--block">🚨 {r}</div>
+              ))}
+              {systemAlerts.map((alert) => (
+                <div key={alert.id} className={`dd-notif dd-notif--${alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'block' : 'warn'}`}>
+                  {alert.severity === 'CRITICAL' ? '🚨' : '⚠️'} {alert.title}
+                </div>
+              ))}
+              {(selectedTrip.delayMinutes ?? 0) > 0 && (
+                <div className="dd-notif dd-notif--delay">⏱️ {selectedTrip.delayMinutes} min delay</div>
+              )}
+              {!hasAlerts && <div className="dd-notif dd-notif--clear">✅ All clear — no issues detected</div>}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* ═══════ SECONDARY ═══════ */}
+      <div className="dd-lower">
+        {/* Completion */}
+        {selectedTrip && canExecuteTrips && (
+          <section className="dd-card">
+            <div className="dd-card__head"><h4>Complete Trip</h4></div>
+            <form className="dd-form" onSubmit={(e) => { e.preventDefault(); void handleTripAction(() => completeTrip(selectedTrip.tripId, completionForm), 'Trip completed.') }}>
+              <div className="dd-form__row">
+                <label><small>End time</small><input type="datetime-local" value={completionForm.actualEndTime} onChange={(e) => setCompletionForm({ ...completionForm, actualEndTime: e.target.value })} /></label>
+                <label><small>Distance (km)</small><input type="number" min="0" value={completionForm.actualDistance} onChange={(e) => setCompletionForm({ ...completionForm, actualDistance: Number(e.target.value) })} /></label>
+                <label><small>Duration</small><input type="text" value={completionForm.actualDuration ?? ''} onChange={(e) => setCompletionForm({ ...completionForm, actualDuration: e.target.value })} /></label>
+                <label><small>Fuel</small><input type="number" min="0" step="0.1" value={completionForm.fuelUsed ?? ''} onChange={(e) => setCompletionForm({ ...completionForm, fuelUsed: e.target.value === '' ? undefined : Number(e.target.value) })} /></label>
+              </div>
+              <label className="dd-form__full"><small>Remarks</small><textarea rows={2} value={completionForm.remarks ?? ''} onChange={(e) => setCompletionForm({ ...completionForm, remarks: e.target.value })} /></label>
+              <button className="dd-btn dd-btn--primary dd-btn--full" disabled={working || !canCompleteSelectedTrip} type="submit">
+                {canCompleteSelectedTrip ? 'Complete Trip' : 'Trip must be in progress'}
+              </button>
+            </form>
+          </section>
+        )}
+
+        {/* All Trips */}
+        <section className="dd-card">
+          <div className="dd-card__head"><h4>All Trips</h4><span className="dd-card__count">{trips.length}</span></div>
+          <div className="dd-tbl">
+            <div className="dd-tbl__head"><span>Trip</span><span>Status</span><span>Vehicle / Driver</span><span>Window</span><span>Distance</span></div>
             {trips.map((trip) => (
-              <button
-                key={trip.tripId}
-                className={`trip-table__row${trip.tripId === selectedTrip?.tripId ? ' trip-table__row--selected' : ''}`}
-                onClick={() => setSelectedTripId(trip.tripId)}
-                type="button"
-              >
-                <span>
-                  <strong>{trip.tripId}</strong>
-                  <small>
-                    {trip.source} {'->'} {trip.destination}
-                  </small>
-                </span>
-                <span className={statusClass(trip.status)}>{trip.status}</span>
-                <span>
-                  <strong>{trip.assignedVehicleId}</strong>
-                  <small>{trip.assignedDriverId}</small>
-                </span>
-                <span>
-                  <strong>{formatDateTime(trip.plannedStartTime)}</strong>
-                  <small>{formatDateTime(trip.plannedEndTime)}</small>
-                </span>
-                <span>
-                  <strong>{trip.actualDistance} km</strong>
-                  <small>{trip.estimatedDuration}</small>
-                </span>
+              <button key={trip.tripId} className={`dd-tbl__row${trip.tripId === selectedTrip?.tripId ? ' dd-tbl__row--sel' : ''}`} onClick={() => setSelectedTripId(trip.tripId)} type="button">
+                <span><strong>{trip.tripId}</strong><small>{trip.source} → {trip.destination}</small></span>
+                <span><span className={statusClass(trip.status)}>{trip.status.replace('_', ' ')}</span></span>
+                <span><strong>{trip.assignedVehicleId}</strong><small>{trip.assignedDriverId}</small></span>
+                <span><strong>{formatDateTime(trip.plannedStartTime)}</strong><small>{formatDateTime(trip.plannedEndTime)}</small></span>
+                <span><strong>{trip.actualDistance || trip.estimatedDistance} km</strong><small>{trip.estimatedDuration}</small></span>
               </button>
             ))}
           </div>
         </section>
       </div>
-
-      {selectedTrip ? (
-        <div className="dashboard-grid dashboard-grid--trips-detail">
-          <MapView title={`${selectedTrip.tripId} route`} stops={selectedTrip.stops} />
-
-          <section className="panel">
-            <div className="panel__header">
-              <div>
-                <h3>{selectedTrip.tripId}</h3>
-                <p className="muted">
-                  {selectedTrip.source} {'->'} {selectedTrip.destination}
-                </p>
-              </div>
-              <div className="trip-detail__chips">
-                <span className={statusClass(selectedTrip.status)}>{selectedTrip.status}</span>
-                <span className={priorityTone(selectedTrip.priority)}>{selectedTrip.priority}</span>
-              </div>
-            </div>
-
-            <div className="trip-detail__stats">
-              <article>
-                <span>Dispatch</span>
-                <strong>{selectedTrip.dispatchStatus}</strong>
-              </article>
-              <article>
-                <span>Compliance</span>
-                <strong>{selectedTrip.complianceStatus}</strong>
-              </article>
-              <article>
-                <span>Optimization</span>
-                <strong>{selectedTrip.optimizationStatus}</strong>
-              </article>
-              <article>
-                <span>Distance</span>
-                <strong>
-                  {selectedTrip.actualDistance || selectedTrip.estimatedDistance} km
-                </strong>
-              </article>
-            </div>
-
-            <div className="trip-compliance-banner">
-              <div>
-                <span>Post-trip summary</span>
-                <strong>{selectedTrip.status === 'COMPLETED' ? 'Completion metrics captured' : 'Awaiting trip completion'}</strong>
-                <p>
-                  Delay, fuel usage, and completion processing metadata are available once the trip is completed.
-                </p>
-              </div>
-              <div className="trip-compliance-banner__meta">
-                <span className="badge">Delay: {selectedTrip.delayMinutes ?? 0} min</span>
-                <span className="badge">Fuel: {selectedTrip.fuelUsed == null ? 'N/A' : selectedTrip.fuelUsed.toFixed(1)}</span>
-                <span className="badge">
-                  Processed: {selectedTrip.completionProcessedAt ? formatDateTime(selectedTrip.completionProcessedAt) : 'Pending'}
-                </span>
-              </div>
-            </div>
-
-            <div className="trip-compliance-banner">
-              <div>
-                <span>Compliance readiness</span>
-                <strong>{complianceCheck?.complianceStatus ?? selectedTrip.complianceStatus}</strong>
-                <p>
-                  {complianceCheck?.recommendedAction ?? 'Select a trip to review compliance checks.'}
-                </p>
-              </div>
-              <div className="trip-compliance-banner__meta">
-                <span className={statusClass(selectedTrip.status)}>{selectedTrip.status}</span>
-                <span className="badge">{complianceCheck?.blockingReasons.length ?? 0} blockers</span>
-              </div>
-            </div>
-
-            <div className="trip-detail__actions">
-              <button className="secondary-button" disabled={working || !canPlanTrips || !canValidateSelectedTrip} onClick={() => void handleTripAction(() => validateTrip(selectedTrip.tripId), 'Trip validated.') } type="button">
-                Validate
-              </button>
-              <button className="secondary-button" disabled={working || !canPlanTrips || !canOptimizeSelectedTrip} onClick={() => void handleTripAction(() => optimizeTrip(selectedTrip.tripId), 'Trip optimized.') } type="button">
-                Optimize
-              </button>
-              <button className="secondary-button" disabled={working || !canPlanTrips || !canDispatchSelectedTrip} onClick={() => void handleTripAction(() => dispatchTrip(selectedTrip.tripId), 'Trip dispatched.') } type="button">
-                Dispatch
-              </button>
-              <button className="secondary-button" disabled={working || !canExecuteTrips || !canStartSelectedTrip} onClick={() => void handleTripAction(() => startTrip(selectedTrip.tripId), 'Trip started.') } type="button">
-                Start
-              </button>
-            </div>
-
-            {canExecuteTrips ? (
-            <form
-              className="trip-completion"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void handleTripAction(
-                  () =>
-                    completeTrip(selectedTrip.tripId, completionForm),
-                  'Trip completed.',
-                )
-              }}
-            >
-              <h4>Close trip</h4>
-              <div className="trip-completion__grid">
-                <label>
-                  <span>Actual end</span>
-                  <input
-                    onChange={(event) => setCompletionForm({ ...completionForm, actualEndTime: event.target.value })}
-                    type="datetime-local"
-                    value={completionForm.actualEndTime}
-                  />
-                </label>
-                <label>
-                  <span>Actual distance</span>
-                  <input
-                    min="0"
-                    onChange={(event) =>
-                      setCompletionForm({ ...completionForm, actualDistance: Number(event.target.value) })
-                    }
-                    type="number"
-                    value={completionForm.actualDistance}
-                  />
-                </label>
-                <label>
-                  <span>Actual duration</span>
-                  <input
-                    onChange={(event) =>
-                      setCompletionForm({ ...completionForm, actualDuration: event.target.value })
-                    }
-                    type="text"
-                    value={completionForm.actualDuration ?? ''}
-                  />
-                </label>
-                <label>
-                  <span>Fuel used (optional)</span>
-                  <input
-                    min="0"
-                    onChange={(event) =>
-                      setCompletionForm({
-                        ...completionForm,
-                        fuelUsed: event.target.value === '' ? undefined : Number(event.target.value),
-                      })
-                    }
-                    step="0.1"
-                    type="number"
-                    value={completionForm.fuelUsed ?? ''}
-                  />
-                </label>
-                <label className="trip-form__wide">
-                  <span>Completion remarks</span>
-                  <textarea
-                    onChange={(event) => setCompletionForm({ ...completionForm, remarks: event.target.value })}
-                    rows={3}
-                    value={completionForm.remarks ?? ''}
-                  />
-                </label>
-              </div>
-              <button className="primary-button" disabled={working || !canCompleteSelectedTrip} type="submit">
-                {canCompleteSelectedTrip ? 'Complete trip' : 'Trip must be in progress to complete'}
-              </button>
-            </form>
-            ) : null}
-            {canExecuteTrips && !canCompleteSelectedTrip ? (
-              <div className="muted">Completion is enabled only after the trip is started.</div>
-            ) : null}
-          </section>
-        </div>
-      ) : null}
-
-      {complianceCheck ? (
-        <section className="panel">
-          <div className="panel__header">
-            <div>
-              <h3>Readiness checks</h3>
-              <p className="muted">Vehicle, driver, maintenance, and route constraints for the selected trip.</p>
-            </div>
-            <span className="badge">{complianceCheck.compliant ? 'Cleared' : 'Blocked'}</span>
-          </div>
-
-          <div className="trip-compliance-grid">
-            <article className="trip-compliance-card">
-              <span>Blocking reasons</span>
-              {complianceCheck.blockingReasons.length ? (
-                <ul>
-                  {complianceCheck.blockingReasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted">No blocking constraints detected.</p>
-              )}
-            </article>
-            <article className="trip-compliance-card">
-              <span>Warnings</span>
-              {complianceCheck.warnings.length ? (
-                <ul>
-                  {complianceCheck.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted">No warnings returned for this trip.</p>
-              )}
-            </article>
-            <article className="trip-compliance-card trip-compliance-card--wide">
-              <span>Machine-readable checks</span>
-              <div className="trip-compliance-checks">
-                {complianceCheck.checks.map((check) => (
-                  <div key={check.code} className={`trip-compliance-check${check.blocking ? ' trip-compliance-check--blocking' : ''}`}>
-                    <strong>{check.label}</strong>
-                    <span>{check.message}</span>
-                    <small>{check.passed ? 'Passed' : 'Failed'}</small>
-                  </div>
-                ))}
-              </div>
-            </article>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="panel">
-        <div className="panel__header">
-          <div>
-            <h3>Live telemetry</h3>
-            <p className="muted">Location, speed, and fuel are linked directly to the selected trip.</p>
-          </div>
-        </div>
-
-        {telemetry.length ? (
-          <div className="trip-telemetry">
-            {telemetry.slice(-5).map((point, index) => (
-              <article key={`${point.timestamp}-${index}`} className="trip-telemetry__item">
-                <strong>{new Date(point.timestamp).toLocaleTimeString()}</strong>
-                <span>
-                  {point.latitude.toFixed(4)}, {point.longitude.toFixed(4)}
-                </span>
-                <small>{Math.round(point.speed)} km/h | Fuel {Math.round(point.fuelLevel)}%</small>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="muted">No telemetry has been recorded for this trip yet.</p>
-        )}
-      </section>
     </div>
   )
 }

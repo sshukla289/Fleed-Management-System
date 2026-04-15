@@ -2,11 +2,36 @@ import { useMemo, useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import { fetchNotificationCount } from '../services/apiService'
+import { ROLE_LABELS, normalizeRole } from '../security/permissions'
 
 const titles: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': {
     title: 'Operations control tower',
     subtitle: 'Operational KPIs, action queue, alerts, and fleet readiness.',
+  },
+  '/admin/dashboard': {
+    title: 'System Control & Governance',
+    subtitle: 'Manage systemic roles, user access models, and review security audit trails.',
+  },
+  '/maintenance/dashboard': {
+    title: 'Maintenance Cockpit',
+    subtitle: 'Manage service orders, vehicle health, and workshop schedules.',
+  },
+  '/driver/dashboard': {
+    title: 'Driver Dashboard',
+    subtitle: 'Manage your active trips, routes, and operational checklists.',
+  },
+  '/dispatcher/dashboard': {
+    title: 'Dispatcher Dashboard',
+    subtitle: 'Real-time fleet command: monitoring, driver assignment, and live alerts.',
+  },
+  '/planner/dashboard': {
+    title: 'Route Planner Dashboard',
+    subtitle: 'Strategic planning: building routes, sequencing stops, and optimizing for efficiency.',
+  },
+  '/operations/dashboard': {
+    title: 'Operations Manager Dashboard',
+    subtitle: 'Strategic fleet intelligence: KPIs, trends, and operational efficiency analysis.',
   },
   '/vehicles': {
     title: 'Vehicles',
@@ -67,7 +92,9 @@ function resolveTitle(pathname: string) {
 }
 
 export function Navbar() {
-  const { session } = useAuth()
+  const { session, logout } = useAuth()
+  const role = session?.profile.role
+  const normalizedRole = normalizeRole(role)
   const { pathname } = useLocation()
   const navigate = useNavigate()
 
@@ -92,9 +119,7 @@ export function Navbar() {
   return (
     <header className="navbar">
       <div className="navbar__title">
-        <span className="navbar__eyebrow">Organization</span>
         <h1>{title.title}</h1>
-        <p>{title.subtitle}</p>
       </div>
 
       <div className="navbar__controls">
@@ -111,15 +136,30 @@ export function Navbar() {
           </svg>
           {unreadCount > 0 && <span className="navbar__notification-badge">{unreadCount}</span>}
         </button>
-        <div className="navbar__profile">
-          <span className="avatar">
-            {session?.profile.name
-              .split(' ')
-              .map((part) => part[0])
-              .slice(0, 2)
-              .join('') ?? 'FM'}
-          </span>
-        </div>
+        <button 
+          className="navbar__logout-button" 
+          onClick={async () => {
+            await logout()
+            navigate('/login')
+          }}
+        >
+          <svg
+            fill="none"
+            height="18"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            width="18"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" x2="9" y1="12" y2="12"></line>
+          </svg>
+          <span>Logout</span>
+        </button>
       </div>
     </header>
   )

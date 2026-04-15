@@ -188,6 +188,10 @@ export function createTrip(input: CreateTripInput): Promise<Trip> {
   return request<Trip>('/trips', { method: 'POST', body: JSON.stringify(input) })
 }
 
+export function updateTrip(tripId: string, input: UpdateTripInput): Promise<Trip> {
+  return request<Trip>(`/trips/${tripId}`, { method: 'PUT', body: JSON.stringify(input) })
+}
+
 export function validateTrip(tripId: string): Promise<TripValidationResult> {
   return request<TripValidationResult>(`/trips/${tripId}/validate`, { method: 'POST' })
 }

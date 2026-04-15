@@ -258,7 +258,7 @@ export function VehicleList() {
       <section className="vehicle-tracking-shell">
         <aside className="vehicle-tracking-sidebar">
           <div className="vehicle-tracking-sidebar__brand">
-            <img src="/logo.svg" alt="Express Logistics Logo" style={{ width: '44px', height: 'auto', borderRadius: '8px' }} />
+            <img src="/logo.png" alt="Express Logistics Logo" style={{ width: '44px', height: 'auto', borderRadius: '8px' }} />
             <div>
               <span className="vehicle-tracking-sidebar__eyebrow">Express Logistics</span>
               <h2>Tracking</h2>

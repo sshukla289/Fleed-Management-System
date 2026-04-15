@@ -21,13 +21,13 @@ public class DashboardController {
     }
 
     @GetMapping("/action-queue")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<List<DashboardActionQueueItemDTO>> getActionQueue() {
         return ResponseEntity.ok(dashboardAnalyticsService.getActionQueue());
     }
 
     @GetMapping("/exceptions")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<List<DashboardExceptionDTO>> getExceptions() {
         return ResponseEntity.ok(dashboardAnalyticsService.getExceptions());
     }

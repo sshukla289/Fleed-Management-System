@@ -18,9 +18,9 @@ export function PageHeader({
   return (
     <div className="page-header">
       <div>
-        <div className="page-header__eyebrow">{eyebrow}</div>
+        {eyebrow && <div className="page-header__eyebrow">{eyebrow}</div>}
         <h2>{title}</h2>
-        <p>{description}</p>
+        {description && <p>{description}</p>}
       </div>
       {actionLabel ? (
         <button

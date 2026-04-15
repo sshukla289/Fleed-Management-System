@@ -19,7 +19,7 @@ public class DashboardAnalyticsController {
     }
 
     @GetMapping("/dashboard")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<DashboardAnalyticsDTO> getDashboardAnalytics() {
         return ResponseEntity.ok(dashboardAnalyticsService.getDashboardSummary());
     }

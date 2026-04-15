@@ -27,7 +27,7 @@ public class RoutePlanController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<List<RoutePlanDTO>> getRoutes() {
         return ResponseEntity.ok(routePlanService.getRoutes());
     }
