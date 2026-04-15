@@ -139,9 +139,6 @@ function saveChecklist(tripId: string, state: ChecklistState) {
 export function Trips() {
   const { session } = useAuth()
   const [trips, setTrips] = useState<Trip[]>([])
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [drivers, setDrivers] = useState<Driver[]>([])
-  const [routes, setRoutes] = useState<RoutePlan[]>([])
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [telemetry, setTelemetry] = useState<TripTelemetryPoint[]>([])
   const [complianceCheck, setComplianceCheck] = useState<ComplianceCheckResult | null>(null)
@@ -170,9 +167,6 @@ export function Trips() {
         fetchTrips(), fetchVehicles(), fetchDrivers(), fetchRoutePlans(),
       ])
       setTrips(tripData)
-      setVehicles(vehicleData)
-      setDrivers(driverData)
-      setRoutes(routeData)
       setSelectedTripId((current) => current ?? tripData[0]?.tripId ?? null)
       setPlannerForm((current) => {
         if (current.routeId) return current
@@ -252,18 +246,6 @@ export function Trips() {
     setSelectedTripId(keepSelected)
   }
 
-  async function handleCreateTrip(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setWorking(true)
-    setMessage(null)
-    try {
-      const createdTrip = await createTrip({ ...plannerForm, stops: plannerForm.stops })
-      await refreshBoard(createdTrip.tripId)
-      setMessage(`Created trip ${createdTrip.tripId}.`)
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to create trip.')
-    } finally { setWorking(false) }
-  }
 
   async function handleTripAction(action: () => Promise<unknown>, successMessage: string) {
     if (!selectedTrip) return

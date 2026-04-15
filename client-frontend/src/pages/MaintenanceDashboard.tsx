@@ -106,7 +106,7 @@ export function MaintenanceDashboard() {
                     <strong>{v.id}</strong>
                     <span className={`dd-pill ${v.status === 'Maintenance' ? 'dd-pill--rose' : (v.fuelLevel < 40 ? 'dd-pill--amber' : 'dd-pill--green')}`} style={{ fontSize: '0.65rem' }}>
                       {v.status}
-                    </div>
+                    </span>
                   </div>
                   <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#6b7280' }}>
                     Type: {v.type} | Mileage: {v.mileage.toLocaleString()} km

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { MapView } from '../components/MapView'
 import {
   fetchDrivers,
@@ -147,7 +147,7 @@ export function PlannerDashboard() {
             </label>
             <label className="dd-form__field">
               <small>Priority</small>
-              <select value={tripForm.priority} onChange={e => setTripForm({...tripForm, priority: e.target.value as any})}>
+              <select value={tripForm.priority} onChange={e => setTripForm({...tripForm, priority: e.target.value as CreateTripInput['priority']})}>
                 <option value="LOW">Low</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="HIGH">High</option>
