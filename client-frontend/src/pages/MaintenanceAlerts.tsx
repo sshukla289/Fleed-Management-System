@@ -132,26 +132,23 @@ export function MaintenanceAlerts() {
   }
 
   return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Workshop queue"
-        title="Maintenance alerts"
-        description="Monitor service priorities and plan workshop capacity using alert severity and due dates."
-        actionLabel={showForm ? 'Close form' : 'Create work order'}
-        onAction={() => {
-          if (!canManage) {
-            return
-          }
-          if (showForm) {
-            resetForm()
-          } else {
-            setShowForm(true)
-          }
-        }}
-        actionDisabled={!canManage}
-      />
+    <div className="page-shell">
+      <div className="page-top-actions">
+        <button
+          className="primary-button"
+          disabled={!canManage}
+          onClick={() => {
+            if (!canManage) return
+            if (showForm) resetForm()
+            else setShowForm(true)
+          }}
+          type="button"
+        >
+          {showForm ? 'Close form' : 'Create work order'}
+        </button>
+      </div>
       {searchParams.get('vehicleId') ? (
-        <div className="panel search-summary">
+        <div className="panel--flat search-summary">
           <div>
             <h3>Service request ready</h3>
             <p className="muted">
@@ -161,7 +158,7 @@ export function MaintenanceAlerts() {
         </div>
       ) : null}
       {showForm && canManage ? (
-        <form className="panel inline-form" onSubmit={handleSubmit}>
+        <form className="panel--flat inline-form" onSubmit={handleSubmit}>
           <div className="panel__header">
             <div>
               <h3>{editingAlertId ? `Edit ${editingAlertId}` : 'Create work order'}</h3>

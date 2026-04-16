@@ -78,7 +78,7 @@ function SectionCard({
   children: ReactNode
 }) {
   return (
-    <article className="dashboard-panel">
+    <article className="dashboard-panel--flat">
       <div className="dashboard-card-header">
         <div>
           <span className="dashboard-card-header__eyebrow">{eyebrow}</span>
@@ -139,19 +139,14 @@ export function Dashboard() {
   const readiness = analytics?.fleetReadinessPercent ?? 0
 
   return (
-    <div className="dashboard-page">
-      <PageHeader
-        eyebrow="Operations control tower"
-        title="Dashboard"
-        description="A server-driven view of the fleet lifecycle: planning, validation, dispatch, live tracking, alerts, and maintenance."
-        actionLabel="Refresh control tower"
-        actionDisabled={loading}
-        onAction={() => {
-          void loadDashboard()
-        }}
-      />
+    <div className="dashboard-page page-shell">
+      <div className="page-top-actions">
+        <button className="secondary-button" disabled={loading} onClick={() => { void loadDashboard(); }} type="button">
+          Refresh control tower
+        </button>
+      </div>
 
-      {message ? <div className="notice">{message}</div> : null}
+
 
       <section className="dashboard-section">
         <div className="dashboard-hero dashboard-hero--tower">

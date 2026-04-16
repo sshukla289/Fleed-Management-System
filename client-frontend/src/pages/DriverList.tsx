@@ -203,24 +203,8 @@ export function DriverList() {
   })
 
   return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Crew"
-        title="Drivers"
-        description="Track duty status, license classes, and vehicle assignments across the roster."
-        actionLabel={showDriverForm ? 'Close driver form' : 'Add driver'}
-        onAction={() => {
-          if (showDriverForm) {
-            resetDriverForm()
-          } else {
-            setShowDriverForm(true)
-            setShowShiftForm(false)
-            setError('')
-          }
-        }}
-      />
-
-      <div className="form-actions">
+    <div className="page-shell">
+      <div className="page-top-actions">
         <button className="secondary-button" onClick={() => {
           setShowShiftForm((current) => !current)
           setShowDriverForm(false)
@@ -228,10 +212,25 @@ export function DriverList() {
         }} type="button">
           {showShiftForm ? 'Close shift assignment' : 'Assign shift'}
         </button>
+        <button
+          className="primary-button"
+          onClick={() => {
+            if (showDriverForm) {
+              resetDriverForm()
+            } else {
+              setShowDriverForm(true)
+              setShowShiftForm(false)
+              setError('')
+            }
+          }}
+          type="button"
+        >
+          {showDriverForm ? 'Close driver form' : 'Add driver'}
+        </button>
       </div>
 
       {showDriverForm ? (
-        <form className="panel inline-form" onSubmit={handleDriverSubmit}>
+        <form className="panel--flat inline-form" onSubmit={handleDriverSubmit}>
           <div className="panel__header">
             <div>
               <h3>{editingDriverId ? `Edit ${editingDriverId}` : 'Add driver'}</h3>
@@ -289,7 +288,7 @@ export function DriverList() {
       ) : null}
 
       {showShiftForm ? (
-        <form className="panel inline-form" onSubmit={handleAssignShift}>
+        <form className="panel--flat inline-form" onSubmit={handleAssignShift}>
           <div className="panel__header">
             <div>
               <h3>Assign shift</h3>

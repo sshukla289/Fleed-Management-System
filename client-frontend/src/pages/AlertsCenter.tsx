@@ -114,35 +114,30 @@ export function AlertsCenter() {
   }
 
   return (
-    <div className="dd">
-      <header className="dd-header" style={{ marginBottom: '24px' }}>
-        <div>
-          <span className="dd-stat__l" style={{ fontSize: '0.875rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Safety & Exception Monitoring</span>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: '#111827', marginTop: '4px' }}>Alerts Center</h1>
-        </div>
-        <button className="dd-btn dd-btn--primary" onClick={() => void loadData()}>Refresh Feed</button>
-      </header>
+    <div className="page-shell">
+      <div className="page-top-actions">
+        <button className="secondary-button" onClick={() => void loadData()}>Refresh Feed</button>
+      </div>
 
       {message && <div className="dd-toast">{message}</div>}
 
-      {/* Dynamic Header Stats */}
-      <section className="dd-topbar" style={{ marginBottom: '24px' }}>
-        <div className="dd-stats-row">
-          <div className="dd-stat">
-            <span className="dd-stat__n" style={{ color: '#253B80' }}>{stats.total}</span>
-            <span className="dd-stat__l">Total Alerts</span>
+      <section className="dashboard-section">
+        <div className="dashboard-stats" style={{ marginBottom: '24px' }}>
+          <div className="stat-card">
+            <span>Total Alerts</span>
+            <strong style={{ color: '#253B80' }}>{stats.total}</strong>
           </div>
-          <div className="dd-stat">
-            <span className="dd-stat__n" style={{ color: '#f59e0b' }}>{stats.open}</span>
-            <span className="dd-stat__l">Open</span>
+          <div className="stat-card">
+            <span>Open</span>
+            <strong style={{ color: '#f59e0b' }}>{stats.open}</strong>
           </div>
-          <div className="dd-stat">
-            <span className="dd-stat__n" style={{ color: '#ef4444' }}>{stats.critical}</span>
-            <span className="dd-stat__l">Critical</span>
+          <div className="stat-card">
+            <span>Critical</span>
+            <strong style={{ color: '#ef4444' }}>{stats.critical}</strong>
           </div>
-          <div className="dd-stat">
-            <span className="dd-stat__n" style={{ color: '#3b82f6' }}>{stats.acknowledged}</span>
-            <span className="dd-stat__l">Acknowledged</span>
+          <div className="stat-card">
+            <span>Acknowledged</span>
+            <strong style={{ color: '#3b82f6' }}>{stats.acknowledged}</strong>
           </div>
         </div>
       </section>

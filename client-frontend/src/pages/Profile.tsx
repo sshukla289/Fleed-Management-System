@@ -83,19 +83,8 @@ export function Profile() {
   }
 
   return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Account"
-        title="Profile"
-        description="Manage the authenticated operator identity and security settings shown across the app."
-        actionLabel={isEditing ? 'Editing profile' : 'Edit profile'}
-        actionDisabled={isEditing}
-        onAction={() => {
-          setIsEditing(true)
-          setProfileError('')
-        }}
-      />
-      <div className="form-actions">
+    <div className="page-shell">
+      <div className="page-top-actions">
         <button
           className="secondary-button"
           onClick={() => {
@@ -107,9 +96,20 @@ export function Profile() {
         >
           {isChangingPassword ? 'Close password form' : 'Change password'}
         </button>
+        <button
+          className="primary-button"
+          disabled={isEditing}
+          onClick={() => {
+            setIsEditing(true)
+            setProfileError('')
+          }}
+          type="button"
+        >
+          {isEditing ? 'Editing profile' : 'Edit profile'}
+        </button>
       </div>
       {isEditing ? (
-        <form className="panel inline-form" onSubmit={handleSaveProfile}>
+        <form className="panel--flat inline-form" onSubmit={handleSaveProfile}>
           <div className="panel__header">
             <div>
               <h3>Edit profile</h3>
@@ -142,7 +142,7 @@ export function Profile() {
         </form>
       ) : null}
       {isChangingPassword ? (
-        <form className="panel inline-form" onSubmit={handleChangePassword}>
+        <form className="panel--flat inline-form" onSubmit={handleChangePassword}>
           <div className="panel__header">
             <div>
               <h3>Change password</h3>
@@ -196,7 +196,7 @@ export function Profile() {
       {passwordSuccess ? <div className="login-hint">{passwordSuccess}</div> : null}
       {profile ? (
         <section className="profile-grid">
-          <article className="panel">
+          <article className="panel--flat">
             <h3>{profile.name}</h3>
             <p className="muted">{profile.role}</p>
             <div className="detail-meta">

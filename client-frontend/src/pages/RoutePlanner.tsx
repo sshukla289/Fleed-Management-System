@@ -248,17 +248,8 @@ export function RoutePlanner() {
   }
 
   return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Dispatch planning"
-        title="Route planner"
-        description="Lay out stop sequences, compare route progress, and prepare dispatch teams for the next wave."
-        actionLabel={isOptimizing ? 'Optimizing...' : 'Optimize route'}
-        actionDisabled={isOptimizing}
-        onAction={handleOptimizeRoutes}
-      />
-
-      <div className="form-actions">
+    <div className="page-shell">
+      <div className="page-top-actions">
         <button
           className="secondary-button"
           onClick={() => {
@@ -274,10 +265,18 @@ export function RoutePlanner() {
         >
           {showForm ? 'Close route form' : 'Add route'}
         </button>
+        <button
+          className="primary-button"
+          disabled={isOptimizing}
+          onClick={handleOptimizeRoutes}
+          type="button"
+        >
+          {isOptimizing ? 'Optimizing...' : 'Optimize route'}
+        </button>
       </div>
 
       {showForm ? (
-        <form className="panel inline-form" onSubmit={handleSubmit}>
+        <form className="panel--flat inline-form" onSubmit={handleSubmit}>
           <div className="panel__header">
             <div>
               <h3>{editingRouteId ? `Edit ${editingRouteId}` : 'Create route'}</h3>

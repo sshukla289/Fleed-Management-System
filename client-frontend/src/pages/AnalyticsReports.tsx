@@ -89,21 +89,16 @@ export function AnalyticsReports() {
 
   return (
     <div className="page-shell">
-      <PageHeader
-        eyebrow="Analytics / Reports"
-        title="Operational performance"
-        description="Server-derived metrics from completed trips, vehicles, drivers, alerts, and maintenance schedules."
-        actionLabel="Refresh reports"
-        actionDisabled={loading || working}
-        onAction={() => {
-          setWorking(true)
-          void loadReports({ startDate, endDate, statusFilter })
-        }}
-      />
+      <div className="page-top-actions">
+        <button className="secondary-button" disabled={loading || working} onClick={() => { setWorking(true); void loadReports({ startDate, endDate, statusFilter }); }} type="button">
+          Refresh reports
+        </button>
+      </div>
 
-      {message ? <div className="notice">{message}</div> : null}
 
-      <section className="panel">
+
+
+      <section className="analytics-filter-container">
         <form className="analytics-filter" onSubmit={handleSubmit}>
           <label>
             <span>Start date</span>
@@ -128,10 +123,10 @@ export function AnalyticsReports() {
             </select>
           </label>
           <div className="analytics-filter__actions">
-            <button className="primary-button" disabled={loading || working} type="submit">
+            <span className="badge">{selectedRange}</span>
+            <button className="primary-button analytics-filter__submit" disabled={loading || working} type="submit">
               Apply filters
             </button>
-            <span className="badge">{selectedRange}</span>
           </div>
         </form>
       </section>
@@ -157,7 +152,7 @@ export function AnalyticsReports() {
       </section>
 
       <section className="dashboard-control-grid">
-        <article className="dashboard-panel">
+        <article className="dashboard-panel--flat">
           <div className="dashboard-card-header">
             <div>
               <span className="dashboard-card-header__eyebrow">Delay trends</span>
@@ -181,7 +176,7 @@ export function AnalyticsReports() {
           </div>
         </article>
 
-        <article className="dashboard-panel">
+        <article className="dashboard-panel--flat">
           <div className="dashboard-card-header">
             <div>
               <span className="dashboard-card-header__eyebrow">Alert frequency</span>
@@ -206,7 +201,7 @@ export function AnalyticsReports() {
         </article>
       </section>
 
-      <section className="panel">
+      <section className="table-container--flat">
         <div className="panel__header">
           <div>
             <h3>Recent trip rows</h3>
@@ -338,7 +333,7 @@ export function AnalyticsReports() {
       </section>
 
       <section className="dashboard-control-grid">
-        <article className="dashboard-panel">
+        <article className="dashboard-panel--flat">
           <div className="dashboard-card-header">
             <div>
               <span className="dashboard-card-header__eyebrow">Maintenance trends</span>
@@ -362,7 +357,7 @@ export function AnalyticsReports() {
           </div>
         </article>
 
-        <article className="dashboard-panel">
+        <article className="dashboard-panel--flat">
           <div className="dashboard-card-header">
             <div>
               <span className="dashboard-card-header__eyebrow">Driver duty mix</span>

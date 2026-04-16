@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { PageHeader } from '../components/PageHeader'
 import { VehicleCard } from '../components/VehicleCard'
 import { useAuth } from '../context/useAuth'
 import { canManageVehicles } from '../security/permissions'
@@ -84,14 +85,25 @@ function formatVehicleNumericInput(value: string, options?: { maxValue?: number 
   return normalizedValue
 }
 
-function statusTone(status: Vehicle['status']) {
-  if (status === 'Active') return 'badge badge--active'
-  if (status === 'Idle') return 'badge badge--idle'
-  return 'badge badge--maintenance'
-}
-
 function statusLabel(status: Vehicle['status']) {
   return status === 'Idle' ? 'Rest' : status
+}
+
+function toneClass(tone: string) {
+  return `dashboard-summary-card tone-${tone}`
+}
+
+function statusPillClass(status: Vehicle['status']) {
+  switch (status) {
+    case 'Active':
+      return 'status-pill status-pill--mint'
+    case 'Idle':
+      return 'status-pill status-pill--amber'
+    case 'Maintenance':
+      return 'status-pill status-pill--rose'
+    default:
+      return 'status-pill'
+  }
 }
 
 export function VehicleList() {
@@ -245,342 +257,223 @@ export function VehicleList() {
     setError('')
   }
 
-  const selectedVehicleRouteStops = selectedVehicle
-    ? [
-        selectedVehicle.location,
-        `${selectedVehicle.id} relay`,
-        `${selectedVehicle.driverId} handoff`,
-        'Destination bay',
-      ]
-    : []
+  const kpis = [
+    { key: 'total', label: 'Total fleet', value: vehicles.length, note: 'Units in inventory', tone: 'blue' },
+    { key: 'active', label: 'Active', value: activeVehicles, note: 'Currently dispatched', tone: 'mint' },
+    { key: 'rest', label: 'Rest', value: idleVehicles, note: 'Idle or between trips', tone: 'amber' },
+    { key: 'service', label: 'Service bay', value: serviceVehicles, note: 'Undergoing maintenance', tone: 'rose' },
+    { key: 'fuel', label: 'Avg fuel', value: `${averageFuelLevel}%`, note: 'Fleet-wide average', tone: 'violet' },
+    { key: 'low-fuel', label: 'Low fuel', value: lowFuelVehicles, note: 'Below 40% threshold', tone: 'amber' },
+  ]
+
   return (
-    <div className="page vehicle-tracking-page">
-      <section className="vehicle-tracking-shell">
-        <aside className="vehicle-tracking-sidebar">
-          <div className="vehicle-tracking-sidebar__brand">
-            <img src="/logo.png" alt="Express Logistics Logo" style={{ width: '44px', height: 'auto', borderRadius: '8px' }} />
-            <div>
-              <span className="vehicle-tracking-sidebar__eyebrow">Express Logistics</span>
-              <h2>Tracking</h2>
-              <p>Live fleet units, route readiness, and service status.</p>
-            </div>
-          </div>
+    <div className="page-shell">
+      <div className="page-top-actions">
+        <button
+           className="primary-button"
+           disabled={!canManage}
+           onClick={() => {
+             if (!canManage) return
+             if (showForm) resetForm()
+             else {
+               setShowForm(true)
+               setEditingVehicleId(null)
+             }
+           }}
+           type="button"
+        >
+          {showForm ? 'Close form' : 'Add vehicle'}
+        </button>
+      </div>
 
-          <div className="vehicle-tracking-filters">
-            <span className="vehicle-tracking-filters__label">Filter by status</span>
-            <div className="vehicle-tracking-filters__chips">
-              {vehicleStatusFilters.map((filter) => (
-                <button
-                  key={filter.value}
-                  className={`vehicle-tracking-filter${statusFilter === filter.value ? ' is-active' : ''}`}
-                  onClick={() => setStatusFilter(filter.value)}
-                  type="button"
-                >
-                  {filter.label}
-                </button>
+
+
+
+      <section className="analytics-filter-container">
+        <form className="analytics-filter" onSubmit={(e) => e.preventDefault()}>
+          <label>
+            <span>Search vehicles</span>
+            <input
+              placeholder="ID, name, location..."
+              type="text"
+              value={searchParams.get('q') ?? ''}
+              onChange={(e) => setSearchParams(e.target.value ? { q: e.target.value } : {})}
+            />
+          </label>
+          <label>
+            <span>Status</span>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
+              {vehicleStatusFilters.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
               ))}
+            </select>
+          </label>
+        </form>
+      </section>
+
+      <section className="dashboard-section">
+        <div className="dashboard-section__header">
+          <div>
+            <span className="dashboard-section__eyebrow">Fleet analytics</span>
+            <h2 className="dashboard-section__title">Operational status</h2>
+          </div>
+          <span className="dashboard-section__counter">{vehicles.length} units</span>
+        </div>
+        <div className="dashboard-summary-grid">
+          {kpis.map((kpi) => (
+            <article key={kpi.key} className={toneClass(kpi.tone)}>
+              <span className="dashboard-summary-card__label">{kpi.label}</span>
+              <strong className="dashboard-summary-card__value">{kpi.value}</strong>
+              <p className="dashboard-summary-card__note">{kpi.note}</p>
+              <span className="dashboard-summary-card__spark" />
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {showForm && canManage && (
+        <section className="panel--flat">
+          <div className="panel__header">
+            <div>
+              <h3>{editingVehicleId ? `Edit ${editingVehicleId}` : 'Create new vehicle'}</h3>
+              <p className="muted">Provide vehicle details to add it to the active fleet tracking system.</p>
             </div>
           </div>
-
-          {query ? (
-            <div className="vehicle-tracking-search">
-              <div>
-                <strong>Search results</strong>
-                <p className="muted">
-                  Showing {filteredVehicles.length} result{filteredVehicles.length === 1 ? '' : 's'} for "
-                  {searchParams.get('q')}"
-                </p>
-              </div>
-              <button className="secondary-button" onClick={() => setSearchParams({})} type="button">
-                Clear search
+          <form className="trip-form" onSubmit={handleSubmit}>
+            <label>
+              <span>Name</span>
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required type="text" />
+            </label>
+            <label>
+              <span>Type</span>
+              <input value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} required type="text" />
+            </label>
+            <label>
+              <span>Status</span>
+              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as any })}>
+                <option value="Active">Active</option>
+                <option value="Idle">Rest</option>
+                <option value="Maintenance">Maintenance</option>
+              </select>
+            </label>
+            <label>
+              <span>Location</span>
+              <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} required type="text" />
+            </label>
+            <label>
+              <span>Fuel level (%)</span>
+              <input value={fuelLevelInput} onChange={(e) => setFuelLevelInput(formatVehicleNumericInput(e.target.value, { maxValue: 100 }))} required type="number" step="0.01" max="100" min="0" />
+            </label>
+            <label>
+              <span>Mileage</span>
+              <input value={mileageInput} onChange={(e) => setMileageInput(formatVehicleNumericInput(e.target.value))} required type="number" step="0.01" min="0" />
+            </label>
+            <label>
+              <span>Driver ID</span>
+              <input value={form.driverId} onChange={(e) => setForm({ ...form, driverId: e.target.value })} required type="text" />
+            </label>
+            <div className="trip-form__actions">
+              <button className="primary-button" type="submit">
+                {editingVehicleId ? 'Save changes' : 'Save vehicle'}
+              </button>
+              <button className="secondary-button" onClick={resetForm} style={{ marginLeft: '12px' }} type="button">
+                Cancel
               </button>
             </div>
-          ) : null}
+          </form>
+        </section>
+      )}
 
-          <div className="vehicle-tracking-stats">
+      {selectedVehicle && (
+        <section className="panel--flat">
+          <div className="panel__header">
             <div>
-              <span>Total fleet</span>
-              <strong>{vehicles.length}</strong>
+              <span className="page-header__eyebrow">Selected Vehicle</span>
+              <h3>{selectedVehicle.name} ({selectedVehicle.id})</h3>
+              <p className="muted">{selectedVehicle.type} &middot; Currently in {selectedVehicle.location}</p>
             </div>
-            <div>
-              <span>Active</span>
-              <strong>{activeVehicles}</strong>
-            </div>
-            <div>
-              <span>Rest</span>
-              <strong>{idleVehicles}</strong>
-            </div>
-            <div>
-              <span>Service bay</span>
-              <strong>{serviceVehicles}</strong>
-            </div>
-            <div>
-              <span>Avg fuel</span>
-              <strong>{averageFuelLevel}%</strong>
-            </div>
-            <div>
-              <span>Low fuel</span>
-              <strong>{lowFuelVehicles}</strong>
-            </div>
-          </div>
-
-          <div className="vehicle-tracking-list">
-            {filteredVehicles.length ? (
-              filteredVehicles.map((vehicle) => (
-                <VehicleCard
-                  key={vehicle.id}
-                  onSelect={(selectedVehicleItem) => setSelectedVehicleId(selectedVehicleItem.id)}
-                  selected={vehicle.id === selectedVehicleId}
-                  variant="tracking"
-                  vehicle={vehicle}
-                />
-              ))
-            ) : (
-              <div className="vehicle-tracking-empty">No vehicles matched this filter.</div>
-            )}
-          </div>
-
-          <button
-            className="vehicle-tracking-create"
-            onClick={() => {
-              if (!canManage) {
-                return
-              }
-              if (showForm) {
-                resetForm()
-              } else {
-                setShowForm(true)
-                setEditingVehicleId(null)
-                setError('')
-              }
-            }}
-            type="button"
-            disabled={!canManage}
-          >
-            {canManage ? (showForm ? 'Close vehicle form' : 'Create vehicle') : 'Read-only access'}
-          </button>
-        </aside>
-
-        <main className="vehicle-tracking-main">
-          <section className="vehicle-tracking-hero">
-            <div>
-              <span className="vehicle-tracking-hero__eyebrow">Vehicle tracking</span>
-              <h1>{selectedVehicle?.name ?? 'Select a vehicle'}</h1>
-              <p>
-                {selectedVehicle
-                  ? `${selectedVehicle.id} - ${selectedVehicle.type} - ${selectedVehicle.location}`
-                  : 'Pick a vehicle from the board to inspect route, fuel, and assignment details.'}
-              </p>
-            </div>
-            <div className="vehicle-tracking-hero__actions">
-              <button className="secondary-button" disabled={!canManage} onClick={() => selectedVehicle && canManage && handleEdit(selectedVehicle)} type="button">
+            <div className="card-actions">
+              <button className="secondary-button" disabled={!canManage} onClick={() => canManage && handleEdit(selectedVehicle)}>
                 Edit vehicle
               </button>
-              <button
-                className="secondary-button danger-button"
-                disabled={!canManage || !selectedVehicle || deletingVehicleId === selectedVehicle.id}
-                onClick={() => selectedVehicle && canManage && handleDelete(selectedVehicle)}
-                type="button"
-              >
-                Delete
+              <button className="secondary-button danger-button" disabled={!canManage || deletingVehicleId === selectedVehicle.id} onClick={() => canManage && handleDelete(selectedVehicle)}>
+                {deletingVehicleId === selectedVehicle.id ? 'Deleting...' : 'Delete'}
               </button>
             </div>
-          </section>
-
-          <div className="vehicle-tracking-tabs" aria-label="Vehicle sections">
-            {['Shipping info', 'Vehicle data', 'Documents', 'Company', 'Billing'].map((tab, index) => (
-              <span key={tab} className={`vehicle-tracking-tab${index === 0 ? ' is-active' : ''}`}>
-                {tab}
-              </span>
-            ))}
           </div>
+          <div className="trip-telemetry" style={{ marginTop: '24px' }}>
+            <article className="trip-telemetry__item">
+              <span>Status</span>
+              <div style={{ marginTop: '6px' }}>
+                <span className={statusPillClass(selectedVehicle.status)}>{statusLabel(selectedVehicle.status)}</span>
+              </div>
+            </article>
+            <article className="trip-telemetry__item">
+              <span>Assigned Driver</span>
+              <strong style={{ display: 'block', fontSize: '1.25rem', marginTop: '4px' }}>{selectedVehicle.driverId}</strong>
+            </article>
+            <article className="trip-telemetry__item">
+              <span>Service Status</span>
+              <strong style={{ display: 'block', fontSize: '1.25rem', marginTop: '4px', color: selectedVehicle.status === 'Maintenance' ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                {selectedVehicle.status === 'Maintenance' ? 'Maintenance Due' : 'Fleet Active'}
+              </strong>
+            </article>
+            <article className="trip-telemetry__item">
+              <span>Mileage</span>
+              <strong style={{ display: 'block', fontSize: '1.25rem', marginTop: '4px' }}>{selectedVehicle.mileage.toLocaleString()} km</strong>
+            </article>
+            
+            <article className="trip-telemetry__item" style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'center' }}>
+              <div>
+                <span>Operational Capacity</span>
+                <strong style={{ display: 'block', fontSize: '2rem', margin: '8px 0', letterSpacing: '-0.02em' }}>{selectedVehicle.fuelLevel}% Fuel</strong>
+                <p className="muted" style={{ fontSize: '0.82rem' }}>Vehicle range and payload readiness estimated from latest telemetry data.</p>
+              </div>
+              <div className="vehicle-card__tracking-visual" style={{ background: 'rgba(241, 245, 249, 0.8)', border: '1px solid #e2e8f0', borderRadius: '18px', padding: '16px' }}>
+                <div className="vehicle-card__tracking-truck" aria-hidden="true" style={{ minHeight: '52px' }}>
+                  <span className="vehicle-card__tracking-cab" style={{ background: 'var(--color-primary)', borderRadius: '8px 4px 4px 8px' }} />
+                  <span className="vehicle-card__tracking-trailer" style={{ background: '#e2e8f0', height: '44px' }}>
+                    <span className="vehicle-card__tracking-progress" style={{ width: `${selectedVehicle.fuelLevel}%`, background: selectedVehicle.fuelLevel < 40 ? 'linear-gradient(90deg, #ef4444, #f87171)' : 'linear-gradient(90deg, var(--color-primary), var(--color-accent))' }} />
+                  </span>
+                  <span className="vehicle-card__tracking-wheel vehicle-card__tracking-wheel--front" style={{ border: '2px solid #fff', background: '#334155' }} />
+                  <span className="vehicle-card__tracking-wheel vehicle-card__tracking-wheel--rear" style={{ border: '2px solid #fff', background: '#334155' }} />
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+      )}
 
-          {showForm && canManage ? (
-            <form className="vehicle-tracking-form" onSubmit={handleSubmit}>
-              <div className="vehicle-tracking-form__header">
-                <div>
-                  <span className="vehicle-tracking-hero__eyebrow">Fleet editor</span>
-                  <h3>{editingVehicleId ? `Edit ${editingVehicleId}` : 'Add a vehicle'}</h3>
-                  <p>Update the live fleet inventory and keep the tracking board in sync.</p>
+      <section className="dashboard-section">
+        <div className="dashboard-section__header">
+          <h2 className="dashboard-section__title">All Vehicles</h2>
+          <span className="dashboard-section__counter">{filteredVehicles.length} matches</span>
+        </div>
+        <div className="trip-compliance-grid">
+          {filteredVehicles.map((vehicle) => (
+             <article key={vehicle.id} className={`trip-compliance-card ${selectedVehicleId === vehicle.id ? 'card--highlighted' : ''}`} onClick={() => setSelectedVehicleId(vehicle.id)} style={{ cursor: 'pointer' }}>
+                <span className="page-header__eyebrow">{vehicle.id}</span>
+                <strong>{vehicle.name}</strong>
+                <p>{vehicle.location}</p>
+                <div style={{ marginTop: '8px' }}>
+                  <span className={statusPillClass(vehicle.status)}>{statusLabel(vehicle.status)}</span>
                 </div>
-              </div>
-              <div className="form-grid">
-                <label className="input-group">
-                  <span>Name</span>
-                  <input
-                    onChange={(event) => setForm({ ...form, name: event.target.value })}
-                    required
-                    type="text"
-                    value={form.name}
-                  />
-                </label>
-                <label className="input-group">
-                  <span>Type</span>
-                  <input
-                    onChange={(event) => setForm({ ...form, type: event.target.value })}
-                    required
-                    type="text"
-                    value={form.type}
-                  />
-                </label>
-                <label className="input-group">
-                  <span>Status</span>
-                  <select
-                    onChange={(event) => setForm({ ...form, status: event.target.value as Vehicle['status'] })}
-                    value={form.status}
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Idle">Rest</option>
-                    <option value="Maintenance">Maintenance</option>
-                  </select>
-                </label>
-                <label className="input-group">
-                  <span>Location</span>
-                  <input
-                    onChange={(event) => setForm({ ...form, location: event.target.value })}
-                    required
-                    type="text"
-                    value={form.location}
-                  />
-                </label>
-                <label className="input-group">
-                  <span>Fuel level (%)</span>
-                  <input
-                    max="100"
-                    min="0"
-                    onChange={(event) =>
-                      setFuelLevelInput(formatVehicleNumericInput(event.target.value, { maxValue: 100 }))
-                    }
-                    required
-                    step="0.01"
-                    type="number"
-                    value={fuelLevelInput}
-                  />
-                </label>
-                <label className="input-group">
-                  <span>Mileage</span>
-                  <input
-                    min="0"
-                    onChange={(event) => setMileageInput(formatVehicleNumericInput(event.target.value))}
-                    required
-                    step="0.01"
-                    type="number"
-                    value={mileageInput}
-                  />
-                </label>
-                <label className="input-group">
-                  <span>Driver ID</span>
-                  <input
-                    onChange={(event) => setForm({ ...form, driverId: event.target.value })}
-                    required
-                    type="text"
-                    value={form.driverId}
-                  />
-                </label>
-              </div>
-              {error ? <div className="form-error">{error}</div> : null}
-              <div className="form-actions">
-                <button className="primary-button" type="submit">
-                  {editingVehicleId ? 'Save changes' : 'Save vehicle'}
-                </button>
-                <button className="secondary-button" onClick={resetForm} type="button">
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : null}
-
-          {selectedVehicle ? (
-            <section className="vehicle-tracking-detail-grid">
-              <article className="vehicle-tracking-panel vehicle-tracking-panel--truck">
-                <div className="vehicle-tracking-panel__header">
-                  <div>
-                    <span className="vehicle-tracking-hero__eyebrow">Current truck capacity</span>
-                    <h3>Fleet readiness</h3>
-                  </div>
-                  <span className={statusTone(selectedVehicle.status)}>{statusLabel(selectedVehicle.status)}</span>
-                </div>
-                <div className="vehicle-tracking-truck">
-                  <div className="vehicle-tracking-truck__label">
-                    <span>Capacity</span>
-                    <strong>{selectedVehicle.fuelLevel}%</strong>
-                  </div>
-                  <div className="vehicle-tracking-truck__body">
-                    <div
-                      className="vehicle-tracking-truck__fill"
-                      style={{ width: `${Math.max(18, selectedVehicle.fuelLevel)}%` }}
-                    />
-                  </div>
-                  <div className="vehicle-tracking-truck__info">
-                    <span>{selectedVehicle.type}</span>
-                    <span>{selectedVehicle.mileage.toLocaleString()} km</span>
-                  </div>
-                </div>
-                <div className="vehicle-tracking-mini-grid">
-                  <div>
+                <div className="trip-detail__stats">
+                  <article>
                     <span>Fuel</span>
-                    <strong>{selectedVehicle.fuelLevel}%</strong>
-                  </div>
-                  <div>
-                    <span>Driver</span>
-                    <strong>{selectedVehicle.driverId}</strong>
-                  </div>
-                  <div>
-                    <span>Location</span>
-                    <strong>{selectedVehicle.location}</strong>
-                  </div>
+                    <strong>{vehicle.fuelLevel}%</strong>
+                  </article>
+                  <article>
+                    <span>Mileage</span>
+                    <strong>{Math.round(vehicle.mileage / 1000)}k</strong>
+                  </article>
                 </div>
-              </article>
-
-              <article className="vehicle-tracking-panel vehicle-tracking-panel--route">
-                <div className="vehicle-tracking-panel__header">
-                  <div>
-                    <span className="vehicle-tracking-hero__eyebrow">Route</span>
-                    <h3>Dispatch path</h3>
-                  </div>
-                  <button className="secondary-button" type="button">
-                    Change route
-                  </button>
-                </div>
-                <div className="vehicle-tracking-map">
-                  <div className="vehicle-tracking-map__grid" />
-                  <div className="vehicle-tracking-map__route" />
-                  {selectedVehicleRouteStops.map((stop, index) => (
-                    <div
-                      key={stop}
-                      className={`vehicle-tracking-map__marker vehicle-tracking-map__marker--${index + 1}`}
-                      title={stop}
-                    />
-                  ))}
-                </div>
-                <div className="vehicle-tracking-route-meta">
-                  <span className="badge">{selectedVehicle.id}</span>
-                  <span className="badge">Driver {selectedVehicle.driverId}</span>
-                  <span className="badge">{selectedVehicle.location}</span>
-                </div>
-              </article>
-
-              <article className="vehicle-tracking-panel vehicle-tracking-panel--reports">
-                <div className="vehicle-tracking-panel__header">
-                  <div>
-                    <span className="vehicle-tracking-hero__eyebrow">Cargo photo reports</span>
-                    <h3>Supporting checks</h3>
-                  </div>
-                  <span className="badge">4 reports</span>
-                </div>
-                <div className="vehicle-tracking-report-grid">
-                  {['Arrival', 'Loading', 'Inspection', 'Departure'].map((label) => (
-                    <div key={label} className="vehicle-tracking-report-card">
-                      <span className="vehicle-tracking-report-card__thumb" />
-                      <strong>{label}</strong>
-                      <p className="muted">Ready for {selectedVehicle.id}</p>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            </section>
-          ) : null}
-        </main>
+             </article>
+          ))}
+          {!filteredVehicles.length && <p className="muted">No vehicles found matching the filters.</p>}
+        </div>
       </section>
     </div>
   )

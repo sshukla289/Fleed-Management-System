@@ -37,32 +37,32 @@ export function VehicleDetail() {
 
   if (!vehicle) {
     return (
-      <div className="page">
-        <PageHeader
-          eyebrow="Vehicle"
-          title="Vehicle not found"
-          description="The selected vehicle could not be loaded from the active fleet records."
-        />
-        <div className="empty-state">Try selecting a vehicle from the vehicle list page.</div>
+    <div className="page-shell">
+      <div className="page-top-actions">
+        <button className="secondary-button" onClick={() => navigate('/vehicles')} type="button">Back to list</button>
       </div>
+      <div className="empty-state">Try selecting a vehicle from the vehicle list page.</div>
+    </div>
     )
   }
 
   return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Vehicle telemetry"
-        title={`${vehicle.name} details`}
-        description="Review live telemetry, route context, and maintenance readiness for this vehicle."
-        actionLabel="Schedule service"
-        onAction={() =>
-          navigate(`/maintenance?vehicleId=${encodeURIComponent(vehicle.id)}&openCreate=1`)
-        }
-      />
+    <div className="page-shell">
+      <div className="page-top-actions">
+        <button
+          className="primary-button"
+          onClick={() =>
+            navigate(`/maintenance?vehicleId=${encodeURIComponent(vehicle.id)}&openCreate=1`)
+          }
+          type="button"
+        >
+          Schedule service
+        </button>
+      </div>
       <section className="detail-grid">
         <div className="detail-section">
-          {error ? <div className="notice">{error}</div> : null}
-          <div className="panel">
+
+          <div className="panel--flat">
             <div className="detail-section__header">
               <div>
                 <h3>{vehicle.id}</h3>

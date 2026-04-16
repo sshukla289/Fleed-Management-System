@@ -79,18 +79,13 @@ export function Notifications() {
 
   return (
     <div className="page-shell">
-      <PageHeader
-        eyebrow="Operations"
-        title="Notifications"
-        description="In-app operational notifications for dispatch, completion, compliance, alerts, and maintenance."
-        actionLabel="Refresh"
-        actionDisabled={loading}
-        onAction={() => {
-          void loadNotifications()
-        }}
-      />
+      <div className="page-top-actions">
+        <button className="secondary-button" disabled={loading} onClick={() => { void loadNotifications(); }} type="button">
+          Refresh
+        </button>
+      </div>
 
-      {message ? <div className="notice">{message}</div> : null}
+
 
       <section className="dashboard-stats">
         {[
@@ -107,7 +102,7 @@ export function Notifications() {
         ))}
       </section>
 
-      <section className="panel">
+      <section className="table-container--flat">
         <div className="panel__header">
           <div>
             <h3>Notification stream</h3>

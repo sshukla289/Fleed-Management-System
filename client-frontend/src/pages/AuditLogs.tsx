@@ -62,21 +62,15 @@ export function AuditLogs() {
 
   return (
     <div className="page-shell">
-      <PageHeader
-        eyebrow="Governance"
-        title="Audit logs"
-        description="Structured, queryable audit entries for key operational actions."
-        actionLabel="Refresh logs"
-        actionDisabled={loading || working}
-        onAction={() => {
-          setWorking(true)
-          void loadAuditLogs({ from, to, entityType, entityId })
-        }}
-      />
+      <div className="page-top-actions">
+        <button className="secondary-button" disabled={loading || working} onClick={() => { setWorking(true); void loadAuditLogs({ from, to, entityType, entityId }); }} type="button">
+          Refresh logs
+        </button>
+      </div>
 
-      {message ? <div className="notice">{message}</div> : null}
 
-      <section className="panel">
+
+      <section className="analytics-filter-container">
         <form className="analytics-filter" onSubmit={handleSubmit}>
           <label>
             <span>From</span>
@@ -128,7 +122,7 @@ export function AuditLogs() {
         ))}
       </section>
 
-      <section className="panel">
+      <section className="table-container--flat">
         <div className="panel__header">
           <div>
             <h3>Event stream</h3>
