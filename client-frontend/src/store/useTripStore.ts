@@ -35,10 +35,9 @@ export const useTripStore = create<TripState>((set) => ({
   updateTripFromSocket: (payload) => set((state) => {
     if (!state.activeTrip || state.activeTrip.tripId !== payload.tripId) return state
 
-    // Update the active trip status and stops if needed
+    // Update the active trip stops if needed
     const updatedTrip = {
       ...state.activeTrip,
-      status: payload.status,
       // We could also find and update the current stop in the stops array here
       stops: state.activeTrip.stops.map(stop => {
         if (stop.name === payload.currentStop) {
