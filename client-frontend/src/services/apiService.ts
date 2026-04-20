@@ -221,6 +221,10 @@ export function fetchTripTelemetry(tripId: string): Promise<TripTelemetryPoint[]
   return request<TripTelemetryPoint[]>(`/trips/${tripId}/telemetry`)
 }
 
+export function fetchVehicleTelemetry(vehicleId: string): Promise<TripTelemetryPoint[]> {
+  return request<TripTelemetryPoint[]>(`/telemetry/${vehicleId}`)
+}
+
 export function login(credentials: LoginCredentials): Promise<AuthSession> {
   return request<AuthSession>('/auth/login', {
     method: 'POST',

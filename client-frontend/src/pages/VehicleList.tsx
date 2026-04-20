@@ -263,7 +263,7 @@ export function VehicleList() {
   ]
 
   return (
-    <div className="page-shell">
+    <div className="page-shell vehicle-list-page">
       <div className="page-top-actions">
         <button
            className="primary-button"

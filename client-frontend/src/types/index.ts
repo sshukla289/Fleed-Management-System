@@ -413,6 +413,39 @@ export interface DashboardAnalytics {
   driversOnDutySnapshot: DashboardResource[]
 }
 
+export type AdminDashboardActivityType = 'ALERT' | 'TRIP' | 'MAINTENANCE'
+
+export interface AdminDashboardLiveVehicle {
+  vehicleId: string
+  vehicleName: string
+  vehicleType: string
+  vehicleStatus: VehicleStatus
+  driverId: string
+  driverName: string
+  tripId: string | null
+  tripStatus: TripStatus | 'IDLE'
+  latitude: number | null
+  longitude: number | null
+  speed: number
+  fuelLevel: number
+  location: string
+  lastUpdated: string
+  telemetryCount: number
+  hasPosition: boolean
+}
+
+export interface AdminDashboardActivity {
+  id: string
+  type: AdminDashboardActivityType
+  title: string
+  detail: string
+  timestamp: string
+  severity: AlertSeverity
+  path: string
+  label: string
+  sourceId: string
+}
+
 export type NotificationCategory =
   | 'CRITICAL_ALERT'
   | 'TRIP_DISPATCH'
