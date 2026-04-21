@@ -1,15 +1,16 @@
 import { useEffect, useEffectEvent, useRef } from 'react'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
-import { useTripStore } from '../store/useTripStore'
 import { getWebSocketBrokerUrl, getWebSocketHttpUrl, readStoredAuthToken } from '../services/websocketService'
+import { useAppDispatch } from '../store/hooks'
+import { updateTripFromSocket } from '../store/tripSlice'
 
 export function useTripWebSocket(tripId: string | undefined) {
-  const updateTrip = useTripStore((state) => state.updateTripFromSocket)
+  const dispatch = useAppDispatch()
   const stompClient = useRef<Client | null>(null)
   const handleIncomingMessage = useEffectEvent((body: string) => {
     try {
-      updateTrip(JSON.parse(body))
+      dispatch(updateTripFromSocket(JSON.parse(body)))
     } catch (error) {
       console.error('Failed to parse trip socket payload', error)
     }

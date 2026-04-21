@@ -3,21 +3,33 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ActionPanel } from './ActionPanel'
 import { MapView } from './MapView'
+import { OtpVerificationModal } from './OtpVerificationModal'
+import { ProofOfDeliveryPanel } from './ProofOfDeliveryPanel'
 import { StopTimeline } from './StopTimeline'
 import { TripChecklistPanel } from './TripChecklistPanel'
 import { TripInfoCard } from './TripInfoCard'
+import { useAuth } from '../../context/useAuth'
 import { useDriverTracking } from '../../hooks/useDriverTracking'
 import {
   completeTrip,
   fetchActiveTrip,
   fetchTripChecklists,
+  fetchTripPod,
   pauseTrip,
+  resendTripOtp,
   resumeTrip,
   startTrip,
+  submitProofOfDelivery,
   updateTripChecklist,
   updateStopStatus,
+  validateTripOtp,
 } from '../../services/tripExecutionService'
-import { useTripExecutionStore } from '../../store/useTripExecutionStore'
+import { useAppDispatch, useAppSelector } from '../../store/hooks'
+import {
+  setActionInProgress,
+  setDriverPosition,
+  setTrip,
+} from '../../store/tripExecutionSlice'
 import type { ChecklistType, TripChecklist } from '../../types'
 import type { DriverPosition, ExecutionStop, ExecutionStopStatus, ExecutionTrip } from '../../types/tripExecution'
 
@@ -77,19 +89,67 @@ function getFallbackDriverPosition(trip: ExecutionTrip, phase: number): DriverPo
   return interpolatePosition(origin, currentStop, phase)
 }
 
+function getTripStatusClasses(status: ExecutionTrip['status']) {
+  switch (status) {
+    case 'IN_PROGRESS':
+      return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+    case 'PAUSED':
+      return 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+    case 'COMPLETED':
+      return 'bg-slate-900 text-white'
+    default:
+      return 'bg-blue-50 text-blue-700 ring-1 ring-blue-200'
+  }
+}
+
+function getSignalClasses(connectionState: string) {
+  if (connectionState === 'connected') {
+    return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+  }
+
+  if (connectionState === 'connecting' || connectionState === 'reconnecting') {
+    return 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+  }
+
+  return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
+}
+
+function getSignalLabel(connectionState: string) {
+  if (connectionState === 'connected') {
+    return 'Signal live'
+  }
+
+  if (connectionState === 'reconnecting') {
+    return 'Reconnecting'
+  }
+
+  if (connectionState === 'connecting') {
+    return 'Connecting'
+  }
+
+  return 'Standby'
+}
+
+function formatSummaryTime(value?: string | null) {
+  if (!value) {
+    return 'Not available'
+  }
+
+  return new Date(value).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export function TripExecutionPage() {
   const queryClient = useQueryClient()
-  const {
-    activeTrip,
-    currentStopId,
-    driverPosition,
-    setActionInProgress,
-    setDriverPosition,
-    setTrip,
-    actionInProgress,
-    tripStatus,
-  } = useTripExecutionStore()
-  const [sheetExpanded, setSheetExpanded] = useState(false)
+  const dispatch = useAppDispatch()
+  const { session } = useAuth()
+  const activeTrip = useAppSelector((state) => state.tripExecution.activeTrip)
+  const currentStopId = useAppSelector((state) => state.tripExecution.currentStopId)
+  const driverPosition = useAppSelector((state) => state.tripExecution.driverPosition)
+  const actionInProgress = useAppSelector((state) => state.tripExecution.actionInProgress)
+  const tripStatus = useAppSelector((state) => state.tripExecution.tripStatus)
   const [pauseReasonDraftState, setPauseReasonDraftState] = useState<{ tripId: string | null; value: string }>({
     tripId: null,
     value: '',
@@ -100,9 +160,13 @@ export function TripExecutionPage() {
   })
   const [checklistSaveError, setChecklistSaveError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [podError, setPodError] = useState<string | null>(null)
+  const [otpError, setOtpError] = useState<string | null>(null)
+  const [otpModalOpen, setOtpModalOpen] = useState(false)
   const activeStop = useMemo(() => getCurrentStop(activeTrip), [activeTrip])
   const trackingTripId = activeTrip && activeTrip.status !== 'COMPLETED' ? activeTrip.id : undefined
   const activeTripId = activeTrip?.id ?? null
+  const isDriver = session?.profile.role === 'DRIVER'
   const pauseReasonDraft = pauseReasonDraftState.tripId === activeTripId ? pauseReasonDraftState.value : ''
   const selectedChecklistType: ChecklistType = !activeTrip || activeTrip.status === 'DISPATCHED'
     ? 'PRE'
@@ -125,28 +189,52 @@ export function TripExecutionPage() {
     enabled: Boolean(activeTrip?.id),
   })
 
+  const podQuery = useQuery({
+    queryKey: ['tripExecution', 'pod', activeTrip?.id],
+    queryFn: () => fetchTripPod(activeTrip!.id),
+    enabled: Boolean(activeTrip?.id),
+  })
+
   useEffect(() => {
     if (activeTripQuery.data) {
-      setTrip(activeTripQuery.data)
+      dispatch(setTrip(activeTripQuery.data))
     }
-  }, [activeTripQuery.data, setTrip])
+  }, [activeTripQuery.data, dispatch])
+
+  useEffect(() => {
+    if (!activeTrip || podQuery.data === undefined) {
+      return
+    }
+
+    const sameSignature = activeTrip.pod?.signatureUrl === podQuery.data?.signatureUrl
+    const samePhoto = activeTrip.pod?.photoUrl === podQuery.data?.photoUrl
+    const sameTimestamp = activeTrip.pod?.timestamp === podQuery.data?.timestamp
+    if (sameSignature && samePhoto && sameTimestamp) {
+      return
+    }
+
+    dispatch(setTrip({
+      ...activeTrip,
+      pod: podQuery.data ?? activeTrip.pod ?? null,
+    }))
+  }, [activeTrip, dispatch, podQuery.data])
 
   useEffect(() => {
     if (!activeTrip) {
-      setDriverPosition(null)
+      dispatch(setDriverPosition(null))
       return
     }
 
     if (latestUpdate?.latitude != null && latestUpdate.longitude != null) {
-      setDriverPosition({
+      dispatch(setDriverPosition({
         lat: latestUpdate.latitude,
         lng: latestUpdate.longitude,
-      })
+      }))
       return
     }
 
     let phase = 0.18
-    setDriverPosition(getFallbackDriverPosition(activeTrip, phase))
+    dispatch(setDriverPosition(getFallbackDriverPosition(activeTrip, phase)))
 
     if (activeTrip.status !== 'IN_PROGRESS') {
       return
@@ -154,15 +242,23 @@ export function TripExecutionPage() {
 
     const interval = window.setInterval(() => {
       phase = phase >= 0.82 ? 0.18 : phase + 0.16
-      setDriverPosition(getFallbackDriverPosition(activeTrip, phase))
+      dispatch(setDriverPosition(getFallbackDriverPosition(activeTrip, phase)))
     }, 4_500)
 
     return () => window.clearInterval(interval)
-  }, [activeTrip, latestUpdate, setDriverPosition])
+  }, [activeTrip, dispatch, latestUpdate])
 
   const invalidateTrip = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['tripExecution', 'activeTrip'] })
   }, [queryClient])
+
+  const invalidatePod = useCallback(() => {
+    if (!activeTripId) {
+      return
+    }
+
+    void queryClient.invalidateQueries({ queryKey: ['tripExecution', 'pod', activeTripId] })
+  }, [activeTripId, queryClient])
 
   const checklists = useMemo(() => checklistQuery.data ?? [], [checklistQuery.data])
 
@@ -177,11 +273,11 @@ export function TripExecutionPage() {
   const updateMutationState = useCallback(
     (trip: ExecutionTrip | null, pendingAction: string | null) => {
       if (trip) {
-        setTrip(trip)
+        dispatch(setTrip(trip))
       }
-      setActionInProgress(pendingAction)
+      dispatch(setActionInProgress(pendingAction))
     },
-    [setActionInProgress, setTrip],
+    [dispatch],
   )
 
   const startMutation = useMutation({
@@ -191,12 +287,18 @@ export function TripExecutionPage() {
       }
 
       setActionError(null)
+      setOtpError(null)
       updateMutationState(null, 'start')
       return startTrip(activeTrip.id)
     },
-    onSuccess: (trip) => updateMutationState(trip, null),
+    onSuccess: (trip) => {
+      updateMutationState(trip, null)
+      if (trip.otp && !trip.otp.verified) {
+        setOtpModalOpen(true)
+      }
+    },
     onError: (error) => {
-      setActionInProgress(null)
+      dispatch(setActionInProgress(null))
       setActionError(error instanceof Error ? error.message : 'Trip start failed')
     },
     onSettled: invalidateTrip,
@@ -214,8 +316,93 @@ export function TripExecutionPage() {
     },
     onSuccess: (trip) => updateMutationState(trip, null),
     onError: (error) => {
-      setActionInProgress(null)
+      dispatch(setActionInProgress(null))
       setActionError(error instanceof Error ? error.message : 'Trip completion failed')
+    },
+    onSettled: invalidateTrip,
+  })
+
+  const podMutation = useMutation({
+    mutationFn: async (payload: { signatureDataUrl: string; photo: File }) => {
+      if (!activeTrip) {
+        throw new Error('No active trip available')
+      }
+
+      setPodError(null)
+      return submitProofOfDelivery({
+        tripId: activeTrip.id,
+        signatureDataUrl: payload.signatureDataUrl,
+        photo: payload.photo,
+      })
+    },
+    onSuccess: (pod) => {
+      if (!activeTrip) {
+        return
+      }
+
+      dispatch(setTrip({
+        ...activeTrip,
+        pod,
+      }))
+    },
+    onError: (error) => {
+      setPodError(error instanceof Error ? error.message : 'Proof of delivery submission failed')
+    },
+    onSettled: () => {
+      invalidateTrip()
+      invalidatePod()
+    },
+  })
+
+  const verifyOtpMutation = useMutation({
+    mutationFn: async (otpCode: string) => {
+      if (!activeTrip) {
+        throw new Error('No active trip available')
+      }
+
+      setOtpError(null)
+      return validateTripOtp(activeTrip.id, otpCode)
+    },
+    onSuccess: (otp) => {
+      if (!activeTrip) {
+        return
+      }
+
+      dispatch(setTrip({
+        ...activeTrip,
+        otp,
+      }))
+      if (otp.verified) {
+        setOtpModalOpen(false)
+      }
+    },
+    onError: (error) => {
+      setOtpError(error instanceof Error ? error.message : 'OTP verification failed')
+    },
+    onSettled: invalidateTrip,
+  })
+
+  const resendOtpMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeTrip) {
+        throw new Error('No active trip available')
+      }
+
+      setOtpError(null)
+      return resendTripOtp(activeTrip.id)
+    },
+    onSuccess: (otp) => {
+      if (!activeTrip) {
+        return
+      }
+
+      dispatch(setTrip({
+        ...activeTrip,
+        otp,
+      }))
+    },
+    onError: (error) => {
+      setOtpError(error instanceof Error ? error.message : 'OTP resend failed')
     },
     onSettled: invalidateTrip,
   })
@@ -232,7 +419,7 @@ export function TripExecutionPage() {
     },
     onSuccess: (trip) => updateMutationState(trip, null),
     onError: (error) => {
-      setActionInProgress(null)
+      dispatch(setActionInProgress(null))
       setActionError(error instanceof Error ? error.message : 'Trip pause failed')
     },
     onSettled: invalidateTrip,
@@ -250,7 +437,7 @@ export function TripExecutionPage() {
     },
     onSuccess: (trip) => updateMutationState(trip, null),
     onError: (error) => {
-      setActionInProgress(null)
+      dispatch(setActionInProgress(null))
       setActionError(error instanceof Error ? error.message : 'Trip resume failed')
     },
     onSettled: invalidateTrip,
@@ -268,7 +455,7 @@ export function TripExecutionPage() {
     },
     onSuccess: (trip) => updateMutationState(trip, null),
     onError: (error) => {
-      setActionInProgress(null)
+      dispatch(setActionInProgress(null))
       setActionError(error instanceof Error ? error.message : 'Stop update failed')
     },
     onSettled: invalidateTrip,
@@ -389,233 +576,172 @@ export function TripExecutionPage() {
   }
 
   const liveSignalTone = connectionState === 'connected'
-    ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-50'
+    ? 'ring-emerald-200'
     : connectionState === 'connecting' || connectionState === 'reconnecting'
-      ? 'border-amber-300/40 bg-amber-500/20 text-amber-50'
-      : 'border-white/20 bg-black/25 text-white/80'
+      ? 'ring-amber-200'
+      : 'ring-slate-200'
+  const currentStopLabel = latestUpdate?.currentStop ?? activeStop?.name ?? 'Route complete'
+  const nextActionLabel = activeTrip.status === 'PAUSED'
+    ? 'Resume trip'
+    : activeStop?.status === 'IN_PROGRESS'
+      ? 'Mark current stop complete'
+      : activeStop
+        ? 'Begin current stop service'
+        : 'Trip closed'
+  const liveSummaryCards = [
+    { label: 'Current stop', value: currentStopLabel, tone: 'text-slate-900' },
+    { label: 'ETA', value: formatSummaryTime(activeTrip.eta), tone: 'text-slate-900' },
+    { label: 'Distance remaining', value: `${activeTrip.distanceRemaining.toFixed(1)} km`, tone: 'text-slate-900' },
+    {
+      label: 'Live speed',
+      value: latestUpdate?.speed != null ? `${latestUpdate.speed.toFixed(1)} km/h` : 'Waiting for update',
+      tone: latestUpdate?.overspeed ? 'text-red-600' : 'text-slate-900',
+    },
+  ]
+  const exceptionCards = [
+    gpsWarning ? { title: 'GPS attention', message: gpsWarning, tone: 'amber' as const } : null,
+    networkWarning ? { title: 'Network attention', message: networkWarning, tone: 'amber' as const } : null,
+    activeTrip.status === 'PAUSED'
+      ? {
+          title: 'Trip paused',
+          message: activeTrip.pauseReason
+            ? `${activeTrip.pauseReason} · ${formatSummaryTime(activeTrip.pausedAt)}`
+            : `Paused at ${formatSummaryTime(activeTrip.pausedAt)}`,
+          tone: 'amber' as const,
+        }
+      : null,
+    latestUpdate?.routeDeviation
+      ? {
+          title: 'Route deviation',
+          message: latestUpdate.routeDeviationDistanceMeters != null
+            ? `${Math.round(latestUpdate.routeDeviationDistanceMeters)} m off route`
+            : 'Vehicle is off the planned route',
+          tone: 'red' as const,
+        }
+      : null,
+  ].filter((entry): entry is { title: string; message: string; tone: 'amber' | 'red' } => Boolean(entry))
 
   return (
-    <div className="-m-6 min-h-[calc(100vh-120px)] overflow-hidden bg-slate-950 md:rounded-[28px]">
-      <div className="relative flex min-h-[calc(100vh-120px)] flex-col md:grid md:grid-cols-[minmax(0,7fr)_minmax(360px,3fr)]">
-        <div className="relative min-h-[calc(100vh-120px)] overflow-hidden">
-          <MapView
-            stops={activeTrip.stops}
-            driverPosition={driverPosition}
-            currentStopId={currentStopId}
-          />
-
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-[450] flex flex-col gap-3 p-4 md:p-6">
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-wrap items-center gap-2"
-            >
-              <span className="rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-semibold tracking-[0.18em] text-white/80 backdrop-blur">
-                LIVE TRIP
-              </span>
-              <span className="rounded-full border border-blue-300/40 bg-blue-500/20 px-3 py-1 text-sm font-medium text-blue-50 backdrop-blur">
-                {activeTrip.id}
-              </span>
-              <span className="rounded-full border border-white/20 bg-black/25 px-3 py-1 text-sm font-medium text-white/80 backdrop-blur">
-                {activeTrip.distanceRemaining.toFixed(1)} km remaining
-              </span>
-              <span className={`rounded-full border px-3 py-1 text-sm font-medium backdrop-blur ${liveSignalTone}`}>
-                {connectionState === 'connected'
-                  ? 'Signal Live'
-                  : connectionState === 'reconnecting'
-                    ? 'Reconnecting'
-                    : connectionState === 'connecting'
-                      ? 'Connecting'
-                      : 'Standby'}
-              </span>
-              {latestUpdate?.overspeed && (
-                <span className="rounded-full border border-red-300/40 bg-red-500/20 px-3 py-1 text-sm font-medium text-red-50 backdrop-blur">
-                  Overspeed detected
+    <div className="-m-6 min-h-[calc(100vh-120px)] bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.10),_transparent_35%),linear-gradient(180deg,_#f8fafc_0%,_#e2e8f0_100%)] md:rounded-[28px]">
+      <div className="mx-auto flex min-h-[calc(100vh-120px)] max-w-[1640px] flex-col gap-6 p-4 md:p-6 xl:p-8">
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-[32px] border border-slate-200/80 bg-white/90 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-6"
+        >
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                  Driver execution
                 </span>
-              )}
-              {latestUpdate?.idle && (
-                <span className="rounded-full border border-amber-300/40 bg-amber-500/20 px-3 py-1 text-sm font-medium text-amber-50 backdrop-blur">
-                  Vehicle idle
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getTripStatusClasses(activeTrip.status)}`}>
+                  {tripStatus}
                 </span>
-              )}
-              {activeTrip.status === 'PAUSED' && (
-                <span className="rounded-full border border-amber-300/40 bg-amber-500/20 px-3 py-1 text-sm font-medium text-amber-50 backdrop-blur">
-                  Trip paused
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getSignalClasses(connectionState)}`}>
+                  {getSignalLabel(connectionState)}
                 </span>
-              )}
-              {latestUpdate?.routeDeviation && (
-                <span className="rounded-full border border-red-300/40 bg-red-600/25 px-3 py-1 text-sm font-medium text-red-50 backdrop-blur">
-                  Route deviation {latestUpdate.routeDeviationDistanceMeters != null ? `${Math.round(latestUpdate.routeDeviationDistanceMeters)}m` : ''}
-                </span>
-              )}
-            </motion.div>
+                {activeTripQuery.isFetching && (
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700 ring-1 ring-blue-200">
+                    Syncing
+                  </span>
+                )}
+              </div>
+              <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">
+                {activeTrip.source} to {activeTrip.destination}
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-slate-600 md:text-base">
+                Live routing, stop control, checklist sign-off, OTP verification, and proof-of-delivery evidence are now organized into a single dispatch-style workspace.
+              </p>
+            </div>
 
-            {(gpsWarning || networkWarning) && (
-              <motion.div
-                initial={{ opacity: 0, y: -12 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="max-w-xl rounded-3xl border border-amber-300/30 bg-amber-500/15 p-4 text-sm text-amber-50 shadow-2xl backdrop-blur"
-              >
-                <p className="font-semibold">Tracking attention needed</p>
-                {gpsWarning && <p className="mt-1">{gpsWarning}</p>}
-                {networkWarning && <p className="mt-1">{networkWarning}</p>}
-              </motion.div>
-            )}
-
-            {activeTrip.status === 'PAUSED' && (
-              <motion.div
-                initial={{ opacity: 0, y: -12 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="max-w-xl rounded-3xl border border-yellow-300/30 bg-yellow-500/15 p-4 text-sm text-yellow-50 shadow-2xl backdrop-blur"
-              >
-                <p className="font-semibold">Trip is paused</p>
-                <p className="mt-1">
-                  {activeTrip.pausedAt
-                    ? `Paused at ${new Date(activeTrip.pausedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}.`
-                    : 'Pause time is syncing.'}
-                </p>
-                {activeTrip.pauseReason && <p className="mt-1">{activeTrip.pauseReason}</p>}
-              </motion.div>
-            )}
-
-            <motion.div
-              initial={{ opacity: 0, y: -12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08 }}
-              className="hidden max-w-xl rounded-3xl border border-white/15 bg-slate-950/50 p-4 text-white shadow-2xl backdrop-blur md:block"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-200/80">
-                    Driver execution
-                  </p>
-                  <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-                    {activeTrip.source} to {activeTrip.destination}
-                  </h1>
-                  <p className="mt-2 text-sm text-slate-200/80">
-                    Real-time driver tracking is pushed over WebSockets with live location, route progress, and trip-state broadcasts.
-                  </p>
+            <div className={`grid w-full gap-3 sm:grid-cols-2 xl:max-w-[520px] ${liveSignalTone}`}>
+              {liveSummaryCards.map((card) => (
+                <div key={card.label} className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
+                  <p className={`mt-2 text-sm font-semibold md:text-base ${card.tone}`}>{card.value}</p>
                 </div>
-                <div className="grid gap-2 text-right text-sm text-slate-200">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-300/60">Status</p>
-                    <p className="mt-1 font-semibold text-white">{tripStatus}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-300/60">Current stop</p>
-                    <p className="mt-1 font-semibold text-white">
-                      {latestUpdate?.currentStop ?? activeStop?.name ?? 'Route complete'}
-                    </p>
-                  </div>
-                  {latestUpdate?.speed != null && (
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-slate-300/60">Speed</p>
-                      <p className="mt-1 font-semibold text-white">{latestUpdate.speed.toFixed(1)} km/h</p>
-                    </div>
-                  )}
-                  {latestUpdate?.routeDeviation && latestUpdate.routeDeviationDistanceMeters != null && (
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-slate-300/60">Deviation</p>
-                      <p className="mt-1 font-semibold text-red-200">{Math.round(latestUpdate.routeDeviationDistanceMeters)} m off route</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </div>
-
-          <div className="absolute inset-x-0 bottom-0 z-[420] hidden bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent p-6 md:block">
-            <div className="grid max-w-2xl grid-cols-3 gap-4">
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4 text-white backdrop-blur">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-300/70">Vehicle</p>
-                <p className="mt-2 text-lg font-semibold">{activeTrip.vehicleNumber}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4 text-white backdrop-blur">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-300/70">ETA</p>
-                <p className="mt-2 text-lg font-semibold">
-                  {new Date(activeTrip.eta).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4 text-white backdrop-blur">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-300/70">Next action</p>
-                <p className="mt-2 text-lg font-semibold">
-                  {activeTrip.status === 'PAUSED'
-                    ? 'Resume trip'
-                    : activeStop?.status === 'IN_PROGRESS'
-                      ? 'Mark complete'
-                      : activeStop
-                        ? 'Mark in progress'
-                        : 'Trip closed'}
-                </p>
-              </div>
+              ))}
             </div>
           </div>
-        </div>
 
-        <aside className="hidden min-h-0 border-l border-slate-200/70 bg-slate-50 md:flex md:flex-col">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-            <TripInfoCard trip={activeTrip} />
-            <TripChecklistPanel
-              trip={activeTrip}
-              checklists={checklists}
-              selectedType={selectedChecklistType}
-              savingType={checklistMutation.isPending ? checklistMutation.variables?.type ?? null : null}
-              saveError={checklistSaveError}
-              onSelectType={(type) => setSelectedChecklistState({ tripId: activeTrip.id, value: type })}
-              onToggleItem={handleChecklistToggle}
-            />
-            <StopTimeline
-              stops={activeTrip.stops}
-              currentStopId={currentStopId}
-              tripStarted={activeTrip.status === 'IN_PROGRESS'}
-              onStopAction={handleStopAction}
-              actionInProgress={actionInProgress}
-            />
-          </div>
-            <ActionPanel
-              trip={activeTrip}
-              actionInProgress={actionInProgress}
-              actionError={actionError}
-              pauseReason={pauseReasonDraft}
-              preTripChecklistComplete={preTripChecklist?.completed ?? false}
-              postTripChecklistComplete={postTripChecklist?.completed ?? false}
-              preTripProgressLabel={preTripProgressLabel}
-              postTripProgressLabel={postTripProgressLabel}
-              onPauseReasonChange={(value) => setPauseReasonDraftState({ tripId: activeTrip.id, value })}
-              onComplete={() => completeMutation.mutate()}
-              onPause={() => pauseMutation.mutate()}
-              onResume={() => resumeMutation.mutate()}
-              onStart={() => startMutation.mutate()}
-            />
-        </aside>
+          {(latestUpdate?.overspeed || latestUpdate?.idle || exceptionCards.length > 0) && (
+            <div className="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+              {latestUpdate?.overspeed && (
+                <div className="rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <p className="font-semibold">Overspeed detected</p>
+                  <p className="mt-1 text-red-600">Driver speed crossed the configured operational threshold.</p>
+                </div>
+              )}
+              {latestUpdate?.idle && (
+                <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  <p className="font-semibold">Vehicle idle</p>
+                  <p className="mt-1 text-amber-600">Vehicle is stationary while the trip remains active.</p>
+                </div>
+              )}
+              {exceptionCards.map((card) => (
+                <div
+                  key={`${card.title}-${card.message}`}
+                  className={`rounded-3xl px-4 py-3 text-sm ${
+                    card.tone === 'red'
+                      ? 'border border-red-200 bg-red-50 text-red-700'
+                      : 'border border-amber-200 bg-amber-50 text-amber-700'
+                  }`}
+                >
+                  <p className="font-semibold">{card.title}</p>
+                  <p className="mt-1 opacity-90">{card.message}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.section>
 
-        <motion.section
-          layout
-          className={`absolute inset-x-0 bottom-0 z-[500] rounded-t-[28px] border-t border-white/60 bg-slate-50/95 shadow-2xl backdrop-blur md:hidden ${
-            sheetExpanded ? 'h-[82dvh]' : 'h-[34dvh]'
-          }`}
-        >
-          <button
-            type="button"
-            onClick={() => setSheetExpanded((current) => !current)}
-            className="flex w-full items-center justify-center py-3"
-            aria-label={sheetExpanded ? 'Collapse trip panel' : 'Expand trip panel'}
-          >
-            <span className="h-1.5 w-14 rounded-full bg-slate-300" />
-          </button>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.78fr)]">
+          <div className="space-y-6">
+            <motion.section
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-[32px] border border-slate-200/80 bg-white p-4 shadow-[0_20px_55px_rgba(15,23,42,0.08)] md:p-5"
+            >
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Route command</p>
+                  <h2 className="mt-2 text-xl font-semibold text-slate-950">Operational map</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Follow the current stop, live driver marker, and remaining route without letting the map dominate the workflow.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3 md:min-w-[380px]">
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Vehicle</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{activeTrip.vehicleNumber}</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Next action</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{nextActionLabel}</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Deviation</p>
+                    <p className={`mt-2 text-sm font-semibold ${latestUpdate?.routeDeviation ? 'text-red-600' : 'text-slate-900'}`}>
+                      {latestUpdate?.routeDeviationDistanceMeters != null ? `${Math.round(latestUpdate.routeDeviationDistanceMeters)} m` : 'On route'}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-          <div className="flex h-[calc(100%-48px)] flex-col">
-            <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-4">
-              <TripInfoCard trip={activeTrip} compact />
-              <TripChecklistPanel
-                trip={activeTrip}
-                checklists={checklists}
-                selectedType={selectedChecklistType}
-                savingType={checklistMutation.isPending ? checklistMutation.variables?.type ?? null : null}
-                saveError={checklistSaveError}
-                onSelectType={(type) => setSelectedChecklistState({ tripId: activeTrip.id, value: type })}
-                onToggleItem={handleChecklistToggle}
-              />
+              <div className="mt-5 overflow-hidden rounded-[28px] border border-slate-200 bg-slate-950 shadow-inner">
+                <div className="h-[320px] md:h-[420px] xl:h-[470px]">
+                  <MapView
+                    stops={activeTrip.stops}
+                    driverPosition={driverPosition}
+                    currentStopId={currentStopId}
+                  />
+                </div>
+              </div>
+            </motion.section>
+
+            <div className="grid gap-6 2xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.22fr)]">
+              <TripInfoCard trip={activeTrip} />
               <StopTimeline
                 stops={activeTrip.stops}
                 currentStopId={currentStopId}
@@ -625,6 +751,68 @@ export function TripExecutionPage() {
               />
             </div>
 
+            <TripChecklistPanel
+              trip={activeTrip}
+              checklists={checklists}
+              selectedType={selectedChecklistType}
+              savingType={checklistMutation.isPending ? checklistMutation.variables?.type ?? null : null}
+              saveError={checklistSaveError}
+              onSelectType={(type) => setSelectedChecklistState({ tripId: activeTrip.id, value: type })}
+              onToggleItem={handleChecklistToggle}
+            />
+
+            <ProofOfDeliveryPanel
+              key={`pod-${activeTrip.id}-${podQuery.data?.timestamp ?? activeTrip.pod?.timestamp ?? 'empty'}`}
+              trip={activeTrip}
+              pod={podQuery.data ?? activeTrip.pod}
+              otp={activeTrip.otp}
+              isDriver={isDriver}
+              submitting={podMutation.isPending}
+              submitError={podError}
+              onSubmit={(payload) => podMutation.mutate(payload)}
+              onOpenOtpModal={() => setOtpModalOpen(true)}
+            />
+          </div>
+
+          <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+            <motion.section
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-[32px] border border-slate-200/80 bg-white p-5 shadow-[0_20px_55px_rgba(15,23,42,0.08)]"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Live operations</p>
+                  <h3 className="mt-2 text-lg font-semibold text-slate-950">Driver control rail</h3>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getSignalClasses(connectionState)}`}>
+                  {getSignalLabel(connectionState)}
+                </span>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                <div className="rounded-3xl bg-slate-50 px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Current stop</p>
+                  <p className="mt-2 text-base font-semibold text-slate-900">{currentStopLabel}</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <div className="rounded-3xl bg-slate-50 px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Driver</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{activeTrip.driverName}</p>
+                  </div>
+                  <div className="rounded-3xl bg-slate-50 px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Speed / mode</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      {latestUpdate?.speed != null ? `${latestUpdate.speed.toFixed(1)} km/h` : 'Waiting for telemetry'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {latestUpdate?.idle ? 'Vehicle idle' : activeTrip.status === 'PAUSED' ? 'Paused state' : 'Moving workflow'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.section>
+
             <ActionPanel
               trip={activeTrip}
               actionInProgress={actionInProgress}
@@ -632,6 +820,8 @@ export function TripExecutionPage() {
               pauseReason={pauseReasonDraft}
               preTripChecklistComplete={preTripChecklist?.completed ?? false}
               postTripChecklistComplete={postTripChecklist?.completed ?? false}
+              podReadyForCompletion={activeTrip.pod?.readyForCompletion ?? false}
+              podTimestamp={activeTrip.pod?.timestamp ?? null}
               preTripProgressLabel={preTripProgressLabel}
               postTripProgressLabel={postTripProgressLabel}
               onPauseReasonChange={(value) => setPauseReasonDraftState({ tripId: activeTrip.id, value })}
@@ -639,23 +829,37 @@ export function TripExecutionPage() {
               onPause={() => pauseMutation.mutate()}
               onResume={() => resumeMutation.mutate()}
               onStart={() => startMutation.mutate()}
-              mobile
             />
-          </div>
-        </motion.section>
+          </aside>
+        </div>
 
         <AnimatePresence>
           {activeTripQuery.isFetching && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="pointer-events-none absolute right-4 top-4 z-[600] rounded-full border border-white/20 bg-slate-950/70 px-3 py-1 text-xs font-medium text-white backdrop-blur"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="fixed bottom-5 right-5 z-[600] rounded-full bg-slate-950 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-lg"
             >
-              Updating route...
+              Updating route
             </motion.div>
           )}
         </AnimatePresence>
+
+        {activeTrip && otpModalOpen && (
+          <OtpVerificationModal
+            key={`otp-${activeTrip.id}-${activeTrip.otp?.id ?? 'none'}`}
+            tripId={activeTrip.id}
+            open={otpModalOpen}
+            otp={activeTrip.otp}
+            verifying={verifyOtpMutation.isPending}
+            resending={resendOtpMutation.isPending}
+            error={otpError}
+            onClose={() => setOtpModalOpen(false)}
+            onVerify={(otpCode) => verifyOtpMutation.mutate(otpCode)}
+            onResend={() => resendOtpMutation.mutate()}
+          />
+        )}
       </div>
     </div>
   )

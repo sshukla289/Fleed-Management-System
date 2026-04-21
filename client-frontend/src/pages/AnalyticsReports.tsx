@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { fetchDriverAnalytics, fetchTripAnalytics, fetchVehicleAnalytics } from '../services/apiService'
-import type { DriverAnalytics, TripAnalytics, TripStatus, VehicleAnalytics } from '../types'
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { useAuth } from '../context/useAuth'
+import { fetchDriverAnalytics, fetchDriverPerformance, fetchTripAnalytics, fetchVehicleAnalytics } from '../services/apiService'
+import type { DriverAnalytics, DriverPerformanceDashboard, TripAnalytics, TripStatus, VehicleAnalytics } from '../types'
 
 const defaultStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
 const defaultEnd = new Date().toISOString().slice(0, 16)
@@ -32,40 +34,110 @@ function statusClass(status: string) {
   }
 }
 
+function chartLabel(name: string) {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) {
+    return parts[0]
+  }
+
+  return `${parts[0]} ${parts[parts.length - 1].slice(0, 1)}.`
+}
+
+function formatDecimal(value: number, digits = 1) {
+  return Number.isFinite(value) ? value.toFixed(digits) : '0.0'
+}
+
 export function AnalyticsReports() {
+  const { session } = useAuth()
   const [tripAnalytics, setTripAnalytics] = useState<TripAnalytics | null>(null)
   const [vehicleAnalytics, setVehicleAnalytics] = useState<VehicleAnalytics | null>(null)
   const [driverAnalytics, setDriverAnalytics] = useState<DriverAnalytics | null>(null)
+  const [driverPerformance, setDriverPerformance] = useState<DriverPerformanceDashboard | null>(null)
+  const [reportError, setReportError] = useState('')
   const [startDate, setStartDate] = useState(defaultStart)
   const [endDate, setEndDate] = useState(defaultEnd)
   const [statusFilter, setStatusFilter] = useState<'ALL' | TripStatus>('ALL')
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
-  
+  const isDriverView = session?.profile.role === 'DRIVER'
+
   const loadReports = useCallback(async (filters: { startDate: string; endDate: string; statusFilter: 'ALL' | TripStatus }) => {
     setLoading(true)
+    setReportError('')
 
-    try {
-      const requestFilters = {
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-        status: filters.statusFilter === 'ALL' ? undefined : filters.statusFilter,
+    const requestFilters = {
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+      status: filters.statusFilter === 'ALL' ? undefined : filters.statusFilter,
+    }
+
+    const errors: string[] = []
+
+    if (isDriverView) {
+      const [driverPerformanceResult] = await Promise.allSettled([
+        fetchDriverPerformance(requestFilters),
+      ] as const)
+
+      setTripAnalytics(null)
+      setVehicleAnalytics(null)
+      setDriverAnalytics(null)
+
+      if (driverPerformanceResult.status === 'fulfilled') {
+        setDriverPerformance(driverPerformanceResult.value)
+      } else {
+        setDriverPerformance(null)
+        const message = driverPerformanceResult.reason instanceof Error ? driverPerformanceResult.reason.message : 'Unable to load driver performance.'
+        errors.push(`driver performance: ${message}`)
       }
-
-      const [tripData, vehicleData, driverData] = await Promise.all([
+    } else {
+      const [tripResult, vehicleResult, driverResult, driverPerformanceResult] = await Promise.allSettled([
         fetchTripAnalytics(requestFilters),
         fetchVehicleAnalytics(requestFilters),
         fetchDriverAnalytics(requestFilters),
-      ])
+        fetchDriverPerformance(requestFilters),
+      ] as const)
 
-      setTripAnalytics(tripData)
-      setVehicleAnalytics(vehicleData)
-      setDriverAnalytics(driverData)
-    } catch (error: unknown) { console.error(error);  console.error(); } finally {
-      setLoading(false)
-      setWorking(false)
+      if (tripResult.status === 'fulfilled') {
+        setTripAnalytics(tripResult.value)
+      } else {
+        setTripAnalytics(null)
+        const message = tripResult.reason instanceof Error ? tripResult.reason.message : 'Unable to load trip analytics.'
+        errors.push(`trip analytics: ${message}`)
+      }
+
+      if (vehicleResult.status === 'fulfilled') {
+        setVehicleAnalytics(vehicleResult.value)
+      } else {
+        setVehicleAnalytics(null)
+        const message = vehicleResult.reason instanceof Error ? vehicleResult.reason.message : 'Unable to load vehicle analytics.'
+        errors.push(`vehicle analytics: ${message}`)
+      }
+
+      if (driverResult.status === 'fulfilled') {
+        setDriverAnalytics(driverResult.value)
+      } else {
+        setDriverAnalytics(null)
+        const message = driverResult.reason instanceof Error ? driverResult.reason.message : 'Unable to load driver analytics.'
+        errors.push(`driver analytics: ${message}`)
+      }
+
+      if (driverPerformanceResult.status === 'fulfilled') {
+        setDriverPerformance(driverPerformanceResult.value)
+      } else {
+        setDriverPerformance(null)
+        const message = driverPerformanceResult.reason instanceof Error ? driverPerformanceResult.reason.message : 'Unable to load driver performance.'
+        errors.push(`driver performance: ${message}`)
+      }
     }
-  }, [])
+
+    if (errors.length) {
+      console.error('Failed to load analytics reports', errors)
+      setReportError(`Some analytics sections could not be loaded. ${errors.join(' ')}`)
+    }
+
+    setLoading(false)
+    setWorking(false)
+  }, [isDriverView])
 
   useEffect(() => {
     void loadReports({ startDate: defaultStart, endDate: defaultEnd, statusFilter: 'ALL' })
@@ -76,6 +148,19 @@ export function AnalyticsReports() {
     [startDate, endDate],
   )
 
+  const driverPerformanceChartData = useMemo(
+    () => (driverPerformance?.drivers ?? []).map((driver) => ({
+      ...driver,
+      shortName: chartLabel(driver.name),
+    })),
+    [driverPerformance],
+  )
+
+  const featuredDrivers = useMemo(
+    () => driverPerformance?.drivers.slice(0, 6) ?? [],
+    [driverPerformance],
+  )
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setWorking(true)
@@ -83,15 +168,12 @@ export function AnalyticsReports() {
   }
 
   return (
-    <div className="page-shell">
+    <div className="page-shell analytics-page">
       <div className="page-top-actions">
         <button className="secondary-button" disabled={loading || working} onClick={() => { setWorking(true); void loadReports({ startDate, endDate, statusFilter }); }} type="button">
           Refresh reports
         </button>
       </div>
-
-
-
 
       <section className="analytics-filter-container">
         <form className="analytics-filter" onSubmit={handleSubmit}>
@@ -125,7 +207,120 @@ export function AnalyticsReports() {
           </div>
         </form>
       </section>
+      {reportError ? <div className="form-error">{reportError}</div> : null}
 
+      <section className="dashboard-section">
+        <div className="dashboard-section__header">
+          <div>
+            <span className="dashboard-section__eyebrow">Driver performance dashboard</span>
+            <h2 className="dashboard-section__title">Punctuality, safety, and speed signals</h2>
+          </div>
+          <span className="dashboard-section__counter">{driverPerformance?.drivers.length ?? 0} drivers</span>
+        </div>
+        <div className="dashboard-summary-grid">
+          {(driverPerformance?.kpis ?? []).map((kpi) => (
+            <article key={kpi.key} className={toneClass(kpi.tone)}>
+              <span className="dashboard-summary-card__label">{kpi.label}</span>
+              <strong className="dashboard-summary-card__value">{kpi.value}</strong>
+              <p className="dashboard-summary-card__note">{kpi.note}</p>
+              <span className="dashboard-summary-card__spark" />
+            </article>
+          ))}
+        </div>
+        <div className="driver-performance-visual-grid">
+          <article className="panel--flat driver-performance-chart-panel">
+            <div className="dashboard-card-header">
+              <div>
+                <span className="dashboard-card-header__eyebrow">Completed trips</span>
+                <h3>Driver output</h3>
+              </div>
+              <span className="badge">{driverPerformance?.totalCompletedTrips ?? 0} completed</span>
+            </div>
+            {driverPerformanceChartData.length ? (
+              <div className="driver-performance-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={driverPerformanceChartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.18)" />
+                    <XAxis dataKey="shortName" stroke="#64748b" tickLine={false} axisLine={false} />
+                    <YAxis stroke="#64748b" tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip cursor={{ fill: 'rgba(37, 99, 235, 0.06)' }} />
+                    <Bar dataKey="tripsCompleted" name="Trips completed" fill="#2563eb" radius={[10, 10, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="muted">No driver performance data is available for the selected period.</p>
+            )}
+          </article>
+
+          <article className="panel--flat driver-performance-chart-panel">
+            <div className="dashboard-card-header">
+              <div>
+                <span className="dashboard-card-header__eyebrow">Quality mix</span>
+                <h3>On-time, safety, and speed</h3>
+              </div>
+              <span className="badge">{formatDecimal(driverPerformance?.averageSafetyScore ?? 0)} safety avg</span>
+            </div>
+            {driverPerformanceChartData.length ? (
+              <div className="driver-performance-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={driverPerformanceChartData} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.18)" />
+                    <XAxis dataKey="shortName" stroke="#64748b" tickLine={false} axisLine={false} />
+                    <YAxis yAxisId="left" stroke="#64748b" tickLine={false} axisLine={false} domain={[0, 100]} />
+                    <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" tickLine={false} axisLine={false} />
+                    <Tooltip />
+                    <Legend />
+                    <Line yAxisId="left" type="monotone" dataKey="onTimePercent" name="On-time %" stroke="#0f766e" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    <Line yAxisId="left" type="monotone" dataKey="safetyScore" name="Safety score" stroke="#16a34a" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    <Line yAxisId="right" type="monotone" dataKey="averageSpeedKph" name="Avg speed km/h" stroke="#f59e0b" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="muted">Performance trend lines will appear once driver data is available.</p>
+            )}
+          </article>
+        </div>
+        <div className="trip-compliance-grid">
+          {featuredDrivers.map((driver) => (
+            <article key={driver.driverId} className="trip-compliance-card driver-performance-card">
+              <div className="driver-performance-card__header">
+                <div>
+                  <span>{driver.driverId}</span>
+                  <strong>{driver.name}</strong>
+                  <p>
+                    {driver.licenseType} {'|'} {driver.status}
+                  </p>
+                </div>
+                <span className="badge">{driver.assignedVehicleId ?? 'Unassigned'}</span>
+              </div>
+              <small>{driver.note}</small>
+              <div className="driver-performance-metrics">
+                <article>
+                  <span>On-time</span>
+                  <strong>{formatDecimal(driver.onTimePercent)}%</strong>
+                </article>
+                <article>
+                  <span>Trips completed</span>
+                  <strong>{driver.tripsCompleted}</strong>
+                </article>
+                <article>
+                  <span>Safety score</span>
+                  <strong>{formatDecimal(driver.safetyScore)}</strong>
+                </article>
+                <article>
+                  <span>Avg speed</span>
+                  <strong>{formatDecimal(driver.averageSpeedKph)} km/h</strong>
+                </article>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {!isDriverView ? (
+        <>
       <section className="dashboard-section">
         <div className="dashboard-section__header">
           <div>
@@ -376,6 +571,8 @@ export function AnalyticsReports() {
           </div>
         </article>
       </section>
+        </>
+      ) : null}
     </div>
   )
 }

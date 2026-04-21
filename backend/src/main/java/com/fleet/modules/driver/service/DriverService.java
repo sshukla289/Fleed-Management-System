@@ -36,6 +36,7 @@ public class DriverService {
             request.name(),
             request.status(),
             request.licenseType(),
+            request.phone(),
             request.assignedVehicleId(),
             request.hoursDrivenToday()
         );
@@ -49,6 +50,7 @@ public class DriverService {
             request.name().trim(),
             DriverDutyStatus.fromValue(request.status()).value(),
             request.licenseType().trim(),
+            normalizePhone(request.phone()),
             normalizedVehicleId,
             request.hoursDrivenToday()
         );
@@ -81,6 +83,7 @@ public class DriverService {
             request.name(),
             request.status(),
             request.licenseType(),
+            request.phone(),
             request.assignedVehicleId(),
             request.hoursDrivenToday()
         );
@@ -94,6 +97,7 @@ public class DriverService {
         driver.setName(request.name().trim());
         driver.setStatus(DriverDutyStatus.fromValue(request.status()).value());
         driver.setLicenseType(request.licenseType().trim());
+        driver.setPhone(normalizePhone(request.phone()));
         driver.setAssignedVehicleId(normalizedVehicleId);
         driver.setHoursDrivenToday(request.hoursDrivenToday());
         return toDto(driverRepository.save(driver));
@@ -113,6 +117,7 @@ public class DriverService {
             driver.getName(),
             driver.getStatus(),
             driver.getLicenseType(),
+            driver.getPhone(),
             driver.getAssignedVehicleId(),
             driver.getHoursDrivenToday()
         );
@@ -143,6 +148,7 @@ public class DriverService {
         String name,
         String status,
         String licenseType,
+        String phone,
         String assignedVehicleId,
         double hoursDrivenToday
     ) {
@@ -158,9 +164,24 @@ public class DriverService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Hours driven must be zero or greater.");
         }
 
+        if (phone != null) {
+            String normalizedPhone = phone.trim();
+            if (normalizedPhone.length() > 20) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number is too long.");
+            }
+
+            if (!normalizedPhone.isEmpty() && !normalizedPhone.matches("^[0-9+()\\-\\s]{7,20}$")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number format is invalid.");
+            }
+        }
+
         if (assignedVehicleId != null && assignedVehicleId.length() > 255) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assigned vehicle ID is too long.");
         }
+    }
+
+    private String normalizePhone(String value) {
+        return isBlank(value) ? null : value.trim();
     }
 
     private String normalizeNullable(String value) {

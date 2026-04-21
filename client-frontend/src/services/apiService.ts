@@ -9,6 +9,7 @@ import type {
   ChecklistType,
   CompleteTripInput,
   ComplianceCheckResult,
+  CreatePodInput,
   CreateDriverInput,
   CreateMaintenanceAlertInput,
   CreateMaintenanceScheduleInput,
@@ -22,15 +23,20 @@ import type {
   CreateSosInput,
   Driver,
   DriverIssue,
+  DriverPerformanceDashboard,
+  DriverTripHistory,
+  DriverProfile,
   DriverAnalytics,
   LoginCredentials,
   MaintenanceAlert,
   MaintenanceSchedule,
   Notification,
+  ProofOfDelivery,
   RoutePlan,
   SosAlert,
   Trip,
   TripChecklist,
+  TripOtpSummary,
   TripAnalytics,
   TripOptimizationResult,
   TripStatus,
@@ -38,12 +44,14 @@ import type {
   TripValidationResult,
   UpdateUserRoleInput,
   UpdateDriverInput,
+  UpdateDriverProfileInput,
   UpdateMaintenanceAlertInput,
   UpdateProfileInput,
   UpdateRoutePlanInput,
   UpdateTripInput,
   UpdateTripChecklistInput,
   UpdateVehicleInput,
+  ValidateTripOtpInput,
   UserProfile,
   Vehicle,
   VehicleAnalytics,
@@ -51,7 +59,7 @@ import type {
 import type { StopStatus } from '../types'
 
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8080/api'
+const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
 
 type AnalyticsFilters = {
   startDate?: string
@@ -123,6 +131,16 @@ async function parseError(response: Response) {
   }
 }
 
+function shouldInvalidateSessionOnUnauthorized(path: string, message: string) {
+  const normalizedMessage = message.trim().toLowerCase()
+
+  if (path === '/auth/me') {
+    return true
+  }
+
+  return normalizedMessage.includes('invalid or expired session')
+}
+
 async function request<T>(path: string, init?: RequestInit, options: RequestOptions = {}): Promise<T> {
   const shouldAttachAuth = options.auth ?? true
   const token = shouldAttachAuth ? readStoredToken() : null
@@ -156,12 +174,14 @@ async function request<T>(path: string, init?: RequestInit, options: RequestOpti
   }
 
   if (!response.ok) {
+    const errorMessage = await parseError(response)
+
     if (response.status === 401 && (options.auth ?? true)) {
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && shouldInvalidateSessionOnUnauthorized(path, errorMessage)) {
         window.dispatchEvent(new CustomEvent('fleet:auth:unauthorized'))
       }
     }
-    throw new Error(await parseError(response))
+    throw new Error(errorMessage)
   }
 
   if (response.status === 204) {
@@ -244,6 +264,17 @@ export function startTrip(tripId: string): Promise<Trip> {
   return request<Trip>(`/trips/${tripId}/start`, { method: 'POST' })
 }
 
+export function resendTripOtp(tripId: string): Promise<TripOtpSummary> {
+  return request<TripOtpSummary>(`/trips/${tripId}/resend-otp`, { method: 'POST' })
+}
+
+export function validateTripOtp(tripId: string, input: ValidateTripOtpInput): Promise<TripOtpSummary> {
+  return request<TripOtpSummary>(`/trips/${tripId}/otp/validate`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
 export function pauseTrip(tripId: string, reason?: string): Promise<Trip> {
   const query = reason && reason.trim()
     ? `?reason=${encodeURIComponent(reason.trim())}`
@@ -260,6 +291,21 @@ export function completeTrip(tripId: string, input: CompleteTripInput): Promise<
     method: 'POST',
     body: JSON.stringify(input),
   })
+}
+
+export function createPod(input: CreatePodInput): Promise<ProofOfDelivery> {
+  const formData = new FormData()
+  formData.set('signatureDataUrl', input.signatureDataUrl)
+  formData.set('photo', input.photo)
+
+  return request<ProofOfDelivery>(`/trips/${input.tripId}/pod`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function fetchTripPod(tripId: string): Promise<ProofOfDelivery | undefined> {
+  return request<ProofOfDelivery>(`/trips/${tripId}/pod`, undefined, { allow404: true })
 }
 
 export function fetchTripChecklists(tripId: string): Promise<TripChecklist[]> {
@@ -337,6 +383,10 @@ export function fetchRoutePlans(): Promise<RoutePlan[]> {
 
 export function fetchProfile(): Promise<UserProfile> {
   return request<UserProfile>('/profile')
+}
+
+export function fetchDriverProfile(): Promise<DriverProfile> {
+  return request<DriverProfile>('/driver/profile')
 }
 
 export function createVehicle(input: CreateVehicleInput): Promise<Vehicle> {
@@ -480,6 +530,21 @@ export function fetchDriverAnalytics(filters: AnalyticsFilters): Promise<DriverA
   })}`)
 }
 
+export function fetchDriverPerformance(filters: AnalyticsFilters = {}): Promise<DriverPerformanceDashboard> {
+  return request<DriverPerformanceDashboard>(`/driver/performance${buildAnalyticsQuery({
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+  })}`)
+}
+
+export function fetchDriverTripHistory(filters: AnalyticsFilters = {}): Promise<DriverTripHistory> {
+  return request<DriverTripHistory>(`/driver/trips/history${buildAnalyticsQuery({
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    status: filters.status,
+  })}`)
+}
+
 export function fetchComplianceCheck(tripId: string): Promise<ComplianceCheckResult> {
   return request<ComplianceCheckResult>(`/compliance/checks/${tripId}`)
 }
@@ -526,6 +591,13 @@ export function deleteRoutePlan(id: string): Promise<void> {
 
 export function updateProfile(input: UpdateProfileInput): Promise<UserProfile> {
   return request<UserProfile>('/profile', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+export function updateDriverProfile(input: UpdateDriverProfileInput): Promise<DriverProfile> {
+  return request<DriverProfile>('/driver/profile', {
     method: 'PUT',
     body: JSON.stringify(input),
   })

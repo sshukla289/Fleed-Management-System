@@ -7,6 +7,10 @@ import com.fleet.modules.checklist.service.ChecklistService;
 import com.fleet.modules.driver.entity.Driver;
 import com.fleet.modules.driver.entity.DriverDutyStatus;
 import com.fleet.modules.driver.repository.DriverRepository;
+import com.fleet.modules.otp.dto.TripOtpSummaryDTO;
+import com.fleet.modules.otp.service.OtpService;
+import com.fleet.modules.pod.dto.PODDTO;
+import com.fleet.modules.pod.service.PODService;
 import com.fleet.modules.trip.dto.CompleteTripRequest;
 import com.fleet.modules.trip.dto.CreateTripRequest;
 import com.fleet.modules.trip.dto.TripDTO;
@@ -52,6 +56,8 @@ public class TripService {
     private final CurrentUserService currentUserService;
     private final TripTrackingBroadcastService tripTrackingBroadcastService;
     private final ChecklistService checklistService;
+    private final OtpService otpService;
+    private final PODService podService;
 
     public TripService(
         TripRepository tripRepository,
@@ -64,7 +70,9 @@ public class TripService {
         NotificationService notificationService,
         CurrentUserService currentUserService,
         TripTrackingBroadcastService tripTrackingBroadcastService,
-        ChecklistService checklistService
+        ChecklistService checklistService,
+        OtpService otpService,
+        PODService podService
     ) {
         this.tripRepository = tripRepository;
         this.validationService = validationService;
@@ -77,6 +85,8 @@ public class TripService {
         this.currentUserService = currentUserService;
         this.tripTrackingBroadcastService = tripTrackingBroadcastService;
         this.checklistService = checklistService;
+        this.otpService = otpService;
+        this.podService = podService;
     }
 
     @Transactional
@@ -153,6 +163,7 @@ public class TripService {
         trip.setAssignedDriverId(normalize(request.assignedDriverId()));
         trip.setSource(normalize(request.source()));
         trip.setDestination(normalize(request.destination()));
+        trip.setRecipientEmail(normalize(request.recipientEmail()));
         trip.setStops(normalizeStops(mapDtoStops(request.stops())));
 
         trip.setPlannedStartTime(request.plannedStartTime());
@@ -300,9 +311,13 @@ public class TripService {
     public TripDTO startTrip(String tripId) {
         Trip trip = findTrip(tripId);
         enforceDriverOwnershipForAction(trip, "start");
+        if (trip.getStatus() == TripStatus.IN_PROGRESS || trip.getStatus() == TripStatus.PAUSED) {
+            return toDto(trip);
+        }
         checklistService.assertPreTripChecklistComplete(trip);
         Trip started = dispatchService.start(trip);
         tripRepository.save(started);
+        otpService.issueOtpForTripStart(started);
         tripTrackingBroadcastService.publishTripState(started, "TRIP_STARTED");
         auditLogService.record(
             currentUserService.getCurrentActor(),
@@ -376,6 +391,7 @@ public class TripService {
         Trip trip = findTrip(tripId);
         enforceDriverOwnershipForAction(trip, "complete");
         checklistService.assertPostTripChecklistComplete(trip);
+        podService.assertReadyForCompletion(trip);
         Trip completed = dispatchService.complete(trip, request);
         tripRepository.save(completed);
         tripTrackingBroadcastService.publishTripState(completed, "TRIP_COMPLETED");
@@ -426,6 +442,8 @@ public class TripService {
     }
 
     private TripDTO toDto(Trip trip) {
+        TripOtpSummaryDTO otp = otpService.getSummary(trip);
+        PODDTO pod = podService.getTripSummary(trip);
         return new TripDTO(
             trip.getId(),
             trip.getRouteId(),
@@ -435,6 +453,7 @@ public class TripService {
             trip.getPriority(),
             trip.getSource(),
             trip.getDestination(),
+            trip.getRecipientEmail(),
             mapStops(trip.getStops()),
 
             trip.getPlannedStartTime(),
@@ -453,7 +472,9 @@ public class TripService {
             trip.getPauseReason(),
             trip.getDelayMinutes(),
             trip.getFuelUsed(),
-            trip.getCompletionProcessedAt()
+            trip.getCompletionProcessedAt(),
+            otp,
+            pod
         );
     }
 
@@ -575,9 +596,8 @@ public class TripService {
     }
 
     private void enforceDriverOwnershipForAction(Trip trip, String action) {
-        enforceReadAccess(trip);
         if (currentUserService.getCurrentRole() != AppRole.DRIVER) {
-            return;
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only drivers can " + action + " trips.");
         }
 
         if (trip.getAssignedDriverId() == null || !trip.getAssignedDriverId().equalsIgnoreCase(currentUserService.getRequiredUser().getId())) {

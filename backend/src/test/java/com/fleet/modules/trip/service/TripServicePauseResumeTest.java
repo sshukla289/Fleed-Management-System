@@ -15,6 +15,8 @@ import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.checklist.service.ChecklistService;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.notification.service.NotificationService;
+import com.fleet.modules.otp.service.OtpService;
+import com.fleet.modules.pod.service.PODService;
 import com.fleet.modules.telemetry.service.TripTrackingBroadcastService;
 import com.fleet.modules.trip.dto.TripDTO;
 import com.fleet.modules.trip.entity.Trip;
@@ -65,6 +67,12 @@ class TripServicePauseResumeTest {
     @Mock
     private ChecklistService checklistService;
 
+    @Mock
+    private OtpService otpService;
+
+    @Mock
+    private PODService podService;
+
     private TripService tripService;
 
     @BeforeEach
@@ -80,7 +88,9 @@ class TripServicePauseResumeTest {
             notificationService,
             currentUserService,
             tripTrackingBroadcastService,
-            checklistService
+            checklistService,
+            otpService,
+            podService
         );
 
         AppUser driver = new AppUser();
@@ -91,6 +101,8 @@ class TripServicePauseResumeTest {
         when(currentUserService.getRequiredUser()).thenReturn(driver);
         when(currentUserService.getCurrentActor()).thenReturn("driver@gmail.com");
         when(tripRepository.save(any(Trip.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(otpService.getSummary(any())).thenReturn(null);
+        when(podService.getTripSummary(any())).thenReturn(null);
     }
 
     @Test

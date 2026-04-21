@@ -1,6 +1,7 @@
 package com.fleet.modules.trip.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -14,8 +15,14 @@ import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.checklist.service.ChecklistService;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.notification.service.NotificationService;
+import com.fleet.modules.otp.dto.TripOtpSummaryDTO;
+import com.fleet.modules.otp.entity.TripOtpStatus;
+import com.fleet.modules.otp.service.OtpService;
+import com.fleet.modules.pod.dto.PODDTO;
+import com.fleet.modules.pod.service.PODService;
 import com.fleet.modules.telemetry.service.TripTrackingBroadcastService;
 import com.fleet.modules.trip.dto.CompleteTripRequest;
+import com.fleet.modules.trip.dto.TripDTO;
 import com.fleet.modules.trip.entity.Trip;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.trip.repository.TripRepository;
@@ -66,6 +73,12 @@ class TripServiceChecklistValidationTest {
     @Mock
     private ChecklistService checklistService;
 
+    @Mock
+    private OtpService otpService;
+
+    @Mock
+    private PODService podService;
+
     private TripService tripService;
 
     @BeforeEach
@@ -81,7 +94,9 @@ class TripServiceChecklistValidationTest {
             notificationService,
             currentUserService,
             tripTrackingBroadcastService,
-            checklistService
+            checklistService,
+            otpService,
+            podService
         );
 
         AppUser driver = new AppUser();
@@ -125,6 +140,48 @@ class TripServiceChecklistValidationTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, thrown.getStatusCode());
         verify(dispatchService, never()).complete(any(Trip.class), any(CompleteTripRequest.class));
+    }
+
+    @Test
+    void startTripReturnsExistingTripWithoutGeneratingDuplicateOtpWhenAlreadyInProgress() {
+        Trip trip = buildTrip("TRIP-1001", TripStatus.IN_PROGRESS);
+        when(tripRepository.findById("TRIP-1001")).thenReturn(Optional.of(trip));
+        when(otpService.getSummary(trip)).thenReturn(new TripOtpSummaryDTO(
+            "OTP-1",
+            "TRIP-1001",
+            TripOtpStatus.SENT,
+            LocalDateTime.now().minusMinutes(1),
+            LocalDateTime.now().minusMinutes(1),
+            LocalDateTime.now().plusMinutes(4),
+            null,
+            LocalDateTime.now().plusSeconds(30),
+            null,
+            30,
+            1,
+            3,
+            false,
+            false,
+            null
+        ));
+        when(podService.getTripSummary(trip)).thenReturn(new PODDTO(
+            "POD-1",
+            "TRIP-1001",
+            null,
+            null,
+            false,
+            null,
+            false,
+            false,
+            false,
+            true
+        ));
+
+        TripDTO dto = tripService.startTrip("TRIP-1001");
+
+        assertSame(TripStatus.IN_PROGRESS, dto.status());
+        verify(checklistService, never()).assertPreTripChecklistComplete(trip);
+        verify(dispatchService, never()).start(trip);
+        verify(otpService, never()).issueOtpForTripStart(trip);
     }
 
     private Trip buildTrip(String tripId, TripStatus status) {

@@ -9,6 +9,7 @@ const groups = [
     items: [
       { label: 'Dashboard', path: '/dashboard', icon: <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DISPATCHER', 'PLANNER', 'MAINTENANCE_MANAGER', 'DRIVER'] },
       { label: 'Analytics', path: '/analytics/reports', icon: <svg viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DISPATCHER', 'PLANNER', 'MAINTENANCE_MANAGER'] },
+      { label: 'Performance', path: '/driver/performance', icon: <svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M7 16l4-6 3 3 3-5"></path><circle cx="7" cy="16" r="1"></circle><circle cx="11" cy="10" r="1"></circle><circle cx="14" cy="13" r="1"></circle><circle cx="17" cy="8" r="1"></circle></svg>, roles: ['DRIVER'] },
       { label: 'Audit logs', path: '/audit-logs', icon: <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
     ],
   },

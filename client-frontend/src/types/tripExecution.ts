@@ -1,4 +1,4 @@
-import type { StopStatus, TripStatus } from './index'
+import type { ProofOfDelivery, StopStatus, TripOtpSummary, TripStatus } from './index'
 
 export type ExecutionTripStatus = Extract<TripStatus, 'DISPATCHED' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED'>
 export type ExecutionStopStatus = StopStatus
@@ -65,4 +65,6 @@ export interface ExecutionTrip {
   pausedAt?: string | null
   pauseReason?: string | null
   completedAt?: string | null
+  otp?: TripOtpSummary | null
+  pod?: ProofOfDelivery | null
 }

@@ -24,7 +24,7 @@ public class AuditLogController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER')")
     public ResponseEntity<List<AuditLogDTO>> getAuditLogs(
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -38,7 +38,7 @@ public class AuditLogController {
     }
 
     @GetMapping("/entity/{entityType}/{entityId}")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER')")
     public ResponseEntity<List<AuditLogDTO>> getAuditLogsByEntity(
         @PathVariable String entityType,
         @PathVariable String entityId

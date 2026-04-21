@@ -11,6 +11,7 @@ export type TripPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type TripDispatchStatus = 'NOT_DISPATCHED' | 'QUEUED' | 'DISPATCHED' | 'RELEASED'
 export type TripComplianceStatus = 'PENDING' | 'COMPLIANT' | 'REVIEW_REQUIRED' | 'BLOCKED'
 export type TripOptimizationStatus = 'NOT_STARTED' | 'READY' | 'OPTIMIZED' | 'FAILED'
+export type TripOtpStatus = 'CREATED' | 'SENT' | 'FAILED' | 'EXPIRED' | 'VERIFIED'
 export type AlertCategory =
   | 'MAINTENANCE'
   | 'SAFETY'
@@ -41,6 +42,7 @@ export interface Driver {
   name: string
   status: 'On Duty' | 'Off Duty' | 'Resting'
   licenseType: string
+  phone?: string | null
   assignedVehicleId?: string
   hoursDrivenToday: number
 }
@@ -102,6 +104,7 @@ export interface Trip {
   priority: TripPriority
   source: string
   destination: string
+  recipientEmail?: string | null
   stops: TripStop[]
   plannedStartTime?: string
   plannedEndTime?: string
@@ -120,6 +123,8 @@ export interface Trip {
   delayMinutes?: number | null
   fuelUsed?: number | null
   completionProcessedAt?: string | null
+  otp?: TripOtpSummary | null
+  pod?: ProofOfDelivery | null
 }
 
 export interface ChecklistItem {
@@ -134,6 +139,37 @@ export interface TripChecklist {
   type: ChecklistType
   items: ChecklistItem[]
   completed: boolean
+}
+
+export interface ProofOfDelivery {
+  id: string
+  tripId: string
+  signatureUrl?: string | null
+  photoUrl?: string | null
+  otpVerified: boolean
+  timestamp?: string | null
+  signatureCaptured: boolean
+  photoCaptured: boolean
+  readyForCompletion: boolean
+  redacted: boolean
+}
+
+export interface TripOtpSummary {
+  id: string
+  tripId: string
+  status: TripOtpStatus
+  issuedAt?: string | null
+  sentAt?: string | null
+  expiresAt?: string | null
+  verifiedAt?: string | null
+  resendAvailableAt?: string | null
+  nextRetryAt?: string | null
+  cooldownSecondsRemaining: number
+  requestsInLastHour: number
+  requestLimitPerHour: number
+  canResend: boolean
+  verified: boolean
+  failureReason?: string | null
 }
 
 export interface UpdateTripChecklistInput {
@@ -173,6 +209,7 @@ export interface CreateTripInput {
   assignedDriverId: string
   source: string
   destination: string
+  recipientEmail?: string
   stops: TripStop[]
   plannedStartTime: string
   plannedEndTime: string
@@ -191,6 +228,16 @@ export interface CompleteTripInput {
   fuelUsed?: number
   actualDuration?: string
   remarks?: string
+}
+
+export interface CreatePodInput {
+  tripId: string
+  signatureDataUrl: string
+  photo: File
+}
+
+export interface ValidateTripOtpInput {
+  otp: string
 }
 
 export interface AuditLogEntry {
@@ -464,6 +511,100 @@ export interface DriverAnalytics {
   dutyTrend: AnalyticsTrend[]
 }
 
+export interface DriverPerformanceRow {
+  driverId: string
+  name: string
+  status: string
+  licenseType: string
+  assignedVehicleId?: string | null
+  totalTrips: number
+  tripsCompleted: number
+  onTimePercent: number
+  safetyScore: number
+  averageSpeedKph: number
+  overspeedEvents: number
+  safetyIncidents: number
+  note: string
+}
+
+export interface DriverPerformanceTrendPoint {
+  label: string
+  tripsCompleted: number
+  onTimePercent: number
+  distanceKm: number
+}
+
+export interface DriverFuelEfficiencyPoint {
+  tripId: string
+  label: string
+  distanceKm: number
+  fuelUsed: number
+  fuelConsumptionPer100Km: number
+}
+
+export interface DriverTimeComparisonPoint {
+  tripId: string
+  label: string
+  plannedDurationMinutes: number
+  actualDurationMinutes: number
+  delayMinutes: number
+}
+
+export interface DriverBehaviorInsight {
+  id: string
+  message: string
+  tone: string
+}
+
+export interface DriverPerformanceDashboard {
+  generatedAt: string
+  startDate: string | null
+  endDate: string | null
+  kpis: DashboardKpi[]
+  fleetOnTimePercent: number
+  totalCompletedTrips: number
+  totalDistanceCoveredKm: number
+  averageTripDurationMinutes: number
+  averageSafetyScore: number
+  safetyStatus: 'Excellent' | 'Good' | 'Poor'
+  totalOverspeedEvents: number
+  totalRouteDeviationEvents: number
+  totalIdleMinutes: number
+  averageSpeedKph: number
+  averageFuelConsumptionPer100Km: number
+  averageFuelEfficiencyKmPerUnit: number
+  averageDelayMinutes: number
+  delayFrequencyPercent: number
+  tripsOverTime: DriverPerformanceTrendPoint[]
+  distanceVsFuel: DriverFuelEfficiencyPoint[]
+  plannedVsActualTime: DriverTimeComparisonPoint[]
+  insights: DriverBehaviorInsight[]
+  drivers: DriverPerformanceRow[]
+}
+
+export interface DriverTripHistoryRow {
+  tripId: string
+  tripDate: string
+  status: TripStatus
+  distanceKm: number
+  durationMinutes: number
+  plannedDurationMinutes: number
+  actualDurationMinutes: number
+  delayMinutes: number
+  fuelUsed?: number | null
+}
+
+export interface DriverTripHistory {
+  generatedAt: string
+  startDate: string | null
+  endDate: string | null
+  statusFilter: string
+  totalTrips: number
+  totalDistanceCoveredKm: number
+  averageTripDurationMinutes: number
+  trips: DriverTripHistoryRow[]
+}
+
 export interface DashboardAnalytics {
   generatedAt: string
   kpis: DashboardKpi[]
@@ -579,6 +720,14 @@ export interface UserProfile {
   assignedRegion: string
 }
 
+export interface DriverProfile extends UserProfile {
+  status: Driver['status']
+  licenseType: string
+  phone?: string | null
+  assignedVehicleId?: string | null
+  assignedVehicleName?: string | null
+}
+
 export interface AuthSession {
   token: string
   profile: UserProfile
@@ -644,6 +793,11 @@ export interface UpdateProfileInput {
   name: string
   email: string
   assignedRegion: string
+}
+
+export interface UpdateDriverProfileInput {
+  email: string
+  phone: string
 }
 
 export interface ChangePasswordInput {

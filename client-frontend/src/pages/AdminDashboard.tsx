@@ -14,7 +14,8 @@ import {
   fetchVehicleTelemetry,
   fetchVehicles,
 } from '../services/apiService'
-import { useAdminDashboardStore } from '../store/useAdminDashboardStore'
+import { useAppDispatch } from '../store/hooks'
+import { setDashboardSnapshot } from '../store/adminDashboardSlice'
 import type {
   AdminDashboardActivity,
   AdminDashboardLiveVehicle,
@@ -602,7 +603,7 @@ function AdminDashboardSkeleton() {
 export function AdminDashboard() {
   const { session } = useAuth()
   const navigate = useNavigate()
-  const setDashboardSnapshot = useAdminDashboardStore((state) => state.setDashboardSnapshot)
+  const dispatch = useAppDispatch()
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
 
   const coreQuery = useQuery({
@@ -665,12 +666,12 @@ export function AdminDashboard() {
   )
 
   useEffect(() => {
-    setDashboardSnapshot({
+    dispatch(setDashboardSnapshot({
       dashboardStats: coreQuery.data?.dashboardStats ?? null,
       liveVehicles,
       recentActivities,
-    })
-  }, [coreQuery.data?.dashboardStats, liveVehicles, recentActivities, setDashboardSnapshot])
+    }))
+  }, [coreQuery.data?.dashboardStats, dispatch, liveVehicles, recentActivities])
 
   const resolvedSelectedVehicleId = useMemo(() => {
     if (!positionedVehicles.length) {

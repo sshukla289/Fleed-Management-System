@@ -1,11 +1,16 @@
 package com.fleet.modules.analytics.service;
 
-import com.fleet.modules.alert.entity.AlertLifecycleStatus;
+import com.fleet.modules.alert.entity.Alert;
+import com.fleet.modules.alert.entity.AlertCategory;
 import com.fleet.modules.alert.repository.AlertRepository;
 import com.fleet.modules.analytics.dto.AnalyticsTrendDTO;
 import com.fleet.modules.analytics.dto.DashboardKpiDTO;
 import com.fleet.modules.analytics.dto.DriverAnalyticsDTO;
 import com.fleet.modules.analytics.dto.DriverAnalyticsRowDTO;
+import com.fleet.modules.analytics.dto.DriverPerformanceDashboardDTO;
+import com.fleet.modules.analytics.dto.DriverPerformanceRowDTO;
+import com.fleet.modules.auth.entity.AppRole;
+import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.analytics.dto.TripAnalyticsDTO;
 import com.fleet.modules.analytics.dto.TripAnalyticsRowDTO;
 import com.fleet.modules.analytics.dto.VehicleAnalyticsDTO;
@@ -26,12 +31,14 @@ import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -45,6 +52,7 @@ public class OperationalAnalyticsService {
     private final TelemetryRepository telemetryRepository;
     private final AlertRepository alertRepository;
     private final MaintenanceScheduleService maintenanceScheduleService;
+    private final CurrentUserService currentUserService;
 
     public OperationalAnalyticsService(
         TripRepository tripRepository,
@@ -52,7 +60,8 @@ public class OperationalAnalyticsService {
         DriverRepository driverRepository,
         TelemetryRepository telemetryRepository,
         AlertRepository alertRepository,
-        MaintenanceScheduleService maintenanceScheduleService
+        MaintenanceScheduleService maintenanceScheduleService,
+        CurrentUserService currentUserService
     ) {
         this.tripRepository = tripRepository;
         this.vehicleRepository = vehicleRepository;
@@ -60,6 +69,7 @@ public class OperationalAnalyticsService {
         this.telemetryRepository = telemetryRepository;
         this.alertRepository = alertRepository;
         this.maintenanceScheduleService = maintenanceScheduleService;
+        this.currentUserService = currentUserService;
     }
 
     public TripAnalyticsDTO getTripAnalytics(LocalDateTime startDate, LocalDateTime endDate, TripStatus status) {
@@ -252,6 +262,144 @@ public class OperationalAnalyticsService {
         );
     }
 
+    public DriverPerformanceDashboardDTO getDriverPerformance(LocalDateTime startDate, LocalDateTime endDate) {
+        List<Trip> trips = filteredTrips(startDate, endDate, null);
+        AppRole currentRole = currentUserService.getCurrentRole();
+        String scopedDriverId = currentRole == AppRole.DRIVER ? currentUserService.getRequiredUser().getId() : null;
+
+        List<Driver> drivers = driverRepository.findAll().stream()
+            .filter(driver -> scopedDriverId == null || driver.getId().equalsIgnoreCase(scopedDriverId))
+            .toList();
+
+        Map<String, List<Trip>> tripsByDriver = trips.stream()
+            .filter(trip -> trip.getAssignedDriverId() != null && !trip.getAssignedDriverId().isBlank())
+            .collect(Collectors.groupingBy(Trip::getAssignedDriverId));
+
+        Set<String> relevantTripIds = trips.stream()
+            .map(Trip::getId)
+            .filter(id -> id != null && !id.isBlank())
+            .collect(Collectors.toSet());
+
+        Map<String, List<Telemetry>> telemetryByTrip = telemetryRepository.findAll().stream()
+            .filter(telemetry -> telemetry.getTripId() != null && relevantTripIds.contains(telemetry.getTripId()))
+            .filter(telemetry -> isWithinRange(telemetry.getTimestamp(), startDate, endDate))
+            .collect(Collectors.groupingBy(Telemetry::getTripId));
+
+        List<Alert> relevantAlerts = alertRepository.findAll().stream()
+            .filter(alert -> alert.getCategory() == AlertCategory.SAFETY)
+            .filter(alert -> isWithinRange(alert.getCreatedAt(), startDate, endDate))
+            .toList();
+
+        List<DriverPerformanceRowDTO> rows = drivers.stream()
+            .map(driver -> toDriverPerformanceRow(driver, tripsByDriver.getOrDefault(driver.getId(), List.of()), telemetryByTrip, relevantAlerts))
+            .sorted(Comparator.comparing(DriverPerformanceRowDTO::tripsCompleted).reversed()
+                .thenComparing(Comparator.comparing(DriverPerformanceRowDTO::safetyScore).reversed())
+                .thenComparing(Comparator.comparing(DriverPerformanceRowDTO::onTimePercent).reversed()))
+            .toList();
+
+        double fleetOnTimePercent = rows.isEmpty()
+            ? 0.0
+            : roundPercent(rows.stream().mapToDouble(DriverPerformanceRowDTO::onTimePercent).average().orElse(0.0));
+        int totalCompletedTrips = rows.stream().mapToInt(DriverPerformanceRowDTO::tripsCompleted).sum();
+        double averageSafetyScore = rows.isEmpty()
+            ? 0.0
+            : roundOneDecimal(rows.stream().mapToDouble(DriverPerformanceRowDTO::safetyScore).average().orElse(0.0));
+        double averageSpeedKph = rows.isEmpty()
+            ? 0.0
+            : roundOneDecimal(rows.stream().mapToDouble(DriverPerformanceRowDTO::averageSpeedKph).average().orElse(0.0));
+
+        List<DashboardKpiDTO> kpis = List.of(
+            new DashboardKpiDTO("driver-performance-on-time", "On-time %", formatPercent(fleetOnTimePercent), "Average completion punctuality across scoped drivers", "blue"),
+            new DashboardKpiDTO("driver-performance-trips", "Trips completed", String.valueOf(totalCompletedTrips), "Completed trips in the selected period", "teal"),
+            new DashboardKpiDTO("driver-performance-safety", "Safety score", formatScore(averageSafetyScore), "Safety score blends overspeed behavior and safety alerts", "mint"),
+            new DashboardKpiDTO("driver-performance-speed", "Avg speed", formatSpeed(averageSpeedKph), "Average observed travel speed from telemetry and completed trips", "amber")
+        );
+
+        return new DriverPerformanceDashboardDTO(
+            now(),
+            startDate,
+            endDate,
+            kpis,
+            fleetOnTimePercent,
+            totalCompletedTrips,
+            0.0,
+            0.0,
+            averageSafetyScore,
+            averageSafetyScore >= 85.0 ? "Excellent" : averageSafetyScore >= 65.0 ? "Good" : "Poor",
+            rows.stream().mapToLong(DriverPerformanceRowDTO::overspeedEvents).sum(),
+            rows.stream().mapToLong(DriverPerformanceRowDTO::safetyIncidents).sum(),
+            0L,
+            averageSpeedKph,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            rows
+        );
+    }
+
+    private DriverPerformanceRowDTO toDriverPerformanceRow(
+        Driver driver,
+        List<Trip> driverTrips,
+        Map<String, List<Telemetry>> telemetryByTrip,
+        List<Alert> relevantAlerts
+    ) {
+        List<Trip> completedTrips = driverTrips.stream()
+            .filter(trip -> trip.getStatus() == TripStatus.COMPLETED)
+            .toList();
+
+        long onTimeCompleted = completedTrips.stream()
+            .filter(this::isTripOnTime)
+            .count();
+
+        double onTimePercent = completedTrips.isEmpty()
+            ? 0.0
+            : roundPercent(onTimeCompleted * 100.0 / completedTrips.size());
+
+        List<Telemetry> telemetryPoints = driverTrips.stream()
+            .flatMap(trip -> telemetryByTrip.getOrDefault(trip.getId(), List.of()).stream())
+            .toList();
+
+        long overspeedEvents = telemetryPoints.stream()
+            .filter(telemetry -> telemetry.getSpeed() > 80)
+            .count();
+
+        double averageSpeedKph = telemetryPoints.isEmpty()
+            ? fallbackAverageSpeed(driverTrips)
+            : roundOneDecimal(telemetryPoints.stream().mapToDouble(Telemetry::getSpeed).average().orElse(0.0));
+
+        Set<String> driverTripIds = driverTrips.stream()
+            .map(Trip::getId)
+            .filter(id -> id != null && !id.isBlank())
+            .collect(Collectors.toSet());
+
+        List<Alert> driverSafetyAlerts = relevantAlerts.stream()
+            .filter(alert -> matchesDriverSafetyAlert(alert, driver.getId(), driverTripIds))
+            .toList();
+
+        double safetyScore = calculateSafetyScore(telemetryPoints.size(), overspeedEvents, driverSafetyAlerts);
+
+        return new DriverPerformanceRowDTO(
+            driver.getId(),
+            driver.getName(),
+            driver.getStatus(),
+            driver.getLicenseType(),
+            driver.getAssignedVehicleId(),
+            driverTrips.size(),
+            completedTrips.size(),
+            onTimePercent,
+            safetyScore,
+            averageSpeedKph,
+            overspeedEvents,
+            driverSafetyAlerts.size(),
+            buildDriverPerformanceNote(driverTrips.size(), completedTrips.size(), overspeedEvents, driverSafetyAlerts.size())
+        );
+    }
+
     private List<Trip> filteredTrips(LocalDateTime startDate, LocalDateTime endDate, TripStatus status) {
         return tripRepository.findAll().stream()
             .filter(trip -> status == null || trip.getStatus() == status)
@@ -412,6 +560,89 @@ public class OperationalAnalyticsService {
         return roundTwoDecimals(totalDistance / totalFuel);
     }
 
+    private boolean isTripOnTime(Trip trip) {
+        return trip != null
+            && trip.getActualEndTime() != null
+            && trip.getPlannedEndTime() != null
+            && !trip.getActualEndTime().isAfter(trip.getPlannedEndTime());
+    }
+
+    private double fallbackAverageSpeed(List<Trip> driverTrips) {
+        double totalDistance = 0.0;
+        double totalHours = 0.0;
+
+        for (Trip trip : driverTrips) {
+            LocalDateTime start = trip.getActualStartTime();
+            LocalDateTime end = trip.getActualEndTime();
+            if (start == null || end == null || !end.isAfter(start) || trip.getActualDistance() <= 0) {
+                continue;
+            }
+
+            totalDistance += trip.getActualDistance();
+            totalHours += Duration.between(start, end).toMinutes() / 60.0;
+        }
+
+        if (totalDistance <= 0 || totalHours <= 0) {
+            return 0.0;
+        }
+
+        return roundOneDecimal(totalDistance / totalHours);
+    }
+
+    private boolean matchesDriverSafetyAlert(Alert alert, String driverId, Set<String> driverTripIds) {
+        if (alert == null) {
+            return false;
+        }
+
+        if (alert.getRelatedTripId() != null && driverTripIds.contains(alert.getRelatedTripId())) {
+            return true;
+        }
+
+        return "driver-sos".equalsIgnoreCase(alert.getSourceType())
+            && alert.getSourceId() != null
+            && alert.getSourceId().equalsIgnoreCase(driverId);
+    }
+
+    private double calculateSafetyScore(int telemetryPoints, long overspeedEvents, List<Alert> safetyAlerts) {
+        double telemetryScore = telemetryPoints == 0
+            ? 100.0
+            : Math.max(0.0, (1.0 - (overspeedEvents / (double) telemetryPoints)) * 100.0);
+
+        double alertPenalty = safetyAlerts.stream()
+            .mapToDouble(alert -> switch (alert.getSeverity()) {
+                case LOW -> 2.0;
+                case MEDIUM -> 5.0;
+                case HIGH -> 8.0;
+                case CRITICAL -> 12.0;
+            })
+            .sum();
+
+        return roundOneDecimal(clamp(telemetryScore - alertPenalty, 0.0, 100.0));
+    }
+
+    private String buildDriverPerformanceNote(int totalTrips, int completedTrips, long overspeedEvents, int safetyIncidents) {
+        if (totalTrips == 0) {
+            return "No trip records in the selected range.";
+        }
+
+        List<String> notes = new ArrayList<>();
+        notes.add(completedTrips + " completed");
+
+        if (overspeedEvents > 0) {
+            notes.add(overspeedEvents + " overspeed events");
+        }
+
+        if (safetyIncidents > 0) {
+            notes.add(safetyIncidents + " safety incidents");
+        }
+
+        if (overspeedEvents == 0 && safetyIncidents == 0) {
+            notes.add("clean safety run");
+        }
+
+        return String.join(" | ", notes);
+    }
+
     private double roundPercent(double value) {
         return Math.round(value * 10.0) / 10.0;
     }
@@ -430,6 +661,18 @@ public class OperationalAnalyticsService {
 
     private String formatMinutes(double value) {
         return String.format(Locale.ROOT, "%.1f min", value);
+    }
+
+    private String formatSpeed(double value) {
+        return String.format(Locale.ROOT, "%.1f km/h", value);
+    }
+
+    private String formatScore(double value) {
+        return String.format(Locale.ROOT, "%.1f / 100", value);
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private LocalDateTime now() {

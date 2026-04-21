@@ -14,6 +14,7 @@ public class Driver {
     private String name;
     private String status;
     private String licenseType;
+    private String phone;
     private String assignedVehicleId;
     private double hoursDrivenToday;
 
@@ -25,6 +26,7 @@ public class Driver {
         String name,
         String status,
         String licenseType,
+        String phone,
         String assignedVehicleId,
         double hoursDrivenToday
     ) {
@@ -32,6 +34,7 @@ public class Driver {
         this.name = name;
         this.status = status;
         this.licenseType = licenseType;
+        this.phone = phone;
         this.assignedVehicleId = assignedVehicleId;
         this.hoursDrivenToday = hoursDrivenToday;
     }
@@ -66,6 +69,14 @@ public class Driver {
 
     public void setLicenseType(String licenseType) {
         this.licenseType = licenseType;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
     }
 
     public String getAssignedVehicleId() {

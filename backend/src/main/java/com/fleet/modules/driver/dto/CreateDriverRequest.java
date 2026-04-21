@@ -4,6 +4,7 @@ public record CreateDriverRequest(
     String name,
     String status,
     String licenseType,
+    String phone,
     String assignedVehicleId,
     double hoursDrivenToday
 ) {

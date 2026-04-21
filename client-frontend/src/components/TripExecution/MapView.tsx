@@ -209,7 +209,7 @@ export function MapView({ stops, driverPosition, currentStopId }: MapViewProps) 
   }, [driverPosition])
 
   return (
-    <div className="relative h-full min-h-[calc(100vh-120px)] bg-slate-900">
+    <div className="relative h-full min-h-[280px] bg-slate-900">
       <div ref={mapContainerRef} className="h-full w-full" />
     </div>
   )

@@ -15,6 +15,10 @@ import com.fleet.modules.auth.security.AuthTokenFilter;
 import com.fleet.modules.auth.security.RestAccessDeniedHandler;
 import com.fleet.modules.auth.security.RestAuthenticationEntryPoint;
 import com.fleet.modules.auth.service.AuthSessionService;
+import com.fleet.modules.otp.dto.TripOtpSummaryDTO;
+import com.fleet.modules.otp.entity.TripOtpStatus;
+import com.fleet.modules.otp.service.OtpService;
+import com.fleet.modules.pod.dto.PODDTO;
 import com.fleet.modules.telemetry.service.TelemetryService;
 import com.fleet.modules.trip.dto.TripDTO;
 import com.fleet.modules.trip.entity.TripComplianceStatus;
@@ -50,6 +54,9 @@ class TripControllerSecurityTest {
     private TripService tripService;
 
     @MockitoBean
+    private OtpService otpService;
+
+    @MockitoBean
     private TelemetryService telemetryService;
 
     @MockitoBean
@@ -59,14 +66,14 @@ class TripControllerSecurityTest {
     private AuthSessionService authSessionService;
 
     @Test
-    void pauseTripAllowsOperationsManager() throws Exception {
-        when(authSessionService.resolveUser("ops-token")).thenReturn(Optional.of(user("USR-1", "OPERATIONS_MANAGER")));
+    void pauseTripAllowsDriverRole() throws Exception {
+        when(authSessionService.resolveUser("driver-token")).thenReturn(Optional.of(user("DR-201", "DRIVER")));
         when(tripService.pauseTrip(eq("TRIP-1001"), eq("Security hold"))).thenReturn(sampleTrip());
 
         mockMvc.perform(
                 post("/api/trips/TRIP-1001/pause")
                     .param("reason", "Security hold")
-                    .header("Authorization", "Bearer ops-token")
+                    .header("Authorization", "Bearer driver-token")
             )
             .andExpect(status().isOk());
 
@@ -74,12 +81,12 @@ class TripControllerSecurityTest {
     }
 
     @Test
-    void pauseTripRejectsPlannerRole() throws Exception {
-        when(authSessionService.resolveUser("planner-token")).thenReturn(Optional.of(user("USR-2", "PLANNER")));
+    void pauseTripRejectsOperationsManagerRole() throws Exception {
+        when(authSessionService.resolveUser("ops-token")).thenReturn(Optional.of(user("USR-2", "OPERATIONS_MANAGER")));
 
         mockMvc.perform(
                 post("/api/trips/TRIP-1001/pause")
-                    .header("Authorization", "Bearer planner-token")
+                    .header("Authorization", "Bearer ops-token")
             )
             .andExpect(status().isForbidden());
 
@@ -87,9 +94,33 @@ class TripControllerSecurityTest {
     }
 
     @Test
-    void pauseTripRequiresAuthentication() throws Exception {
-        mockMvc.perform(post("/api/trips/TRIP-1001/pause"))
-            .andExpect(status().isUnauthorized());
+    void resendOtpAllowsDriverRole() throws Exception {
+        when(authSessionService.resolveUser("driver-token")).thenReturn(Optional.of(user("DR-201", "DRIVER")));
+        when(otpService.resendOtp("TRIP-1001")).thenReturn(new TripOtpSummaryDTO(
+            "OTP-1",
+            "TRIP-1001",
+            TripOtpStatus.SENT,
+            LocalDateTime.now().minusSeconds(5),
+            LocalDateTime.now().minusSeconds(4),
+            LocalDateTime.now().plusMinutes(5),
+            null,
+            LocalDateTime.now().plusSeconds(30),
+            null,
+            30,
+            1,
+            3,
+            false,
+            false,
+            null
+        ));
+
+        mockMvc.perform(
+                post("/api/trips/TRIP-1001/resend-otp")
+                    .header("Authorization", "Bearer driver-token")
+            )
+            .andExpect(status().isOk());
+
+        verify(otpService).resendOtp("TRIP-1001");
     }
 
     private AppUser user(String id, String role) {
@@ -112,6 +143,7 @@ class TripControllerSecurityTest {
             TripPriority.HIGH,
             "Mumbai Hub",
             "Pune Depot",
+            "recipient@example.com",
             List.of(),
             LocalDateTime.now().minusHours(3),
             LocalDateTime.now().plusHours(2),
@@ -129,7 +161,20 @@ class TripControllerSecurityTest {
             "Security hold",
             0,
             null,
-            null
+            null,
+            null,
+            new PODDTO(
+                "POD-1",
+                "TRIP-1001",
+                null,
+                null,
+                false,
+                null,
+                false,
+                false,
+                false,
+                true
+            )
         );
     }
 }
