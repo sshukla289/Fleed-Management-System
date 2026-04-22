@@ -56,6 +56,7 @@ export function useDriverInbox() {
   const clientRef = useRef<Client | null>(null)
   const alertSubscriptionRef = useRef<StompSubscription | null>(null)
   const notificationSubscriptionRef = useRef<StompSubscription | null>(null)
+  const userNotificationSubscriptionRef = useRef<StompSubscription | null>(null)
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
@@ -116,6 +117,7 @@ export function useDriverInbox() {
 
     alertSubscriptionRef.current?.unsubscribe()
     notificationSubscriptionRef.current?.unsubscribe()
+    userNotificationSubscriptionRef.current?.unsubscribe()
     void clientRef.current?.deactivate()
 
     const client = new Client({
@@ -139,6 +141,7 @@ export function useDriverInbox() {
 
       alertSubscriptionRef.current?.unsubscribe()
       notificationSubscriptionRef.current?.unsubscribe()
+      userNotificationSubscriptionRef.current?.unsubscribe()
 
       alertSubscriptionRef.current = client.subscribe(inboxScope.alertsTopic, (message) => {
         const parsed = parseJson<Alert>(message)
@@ -153,6 +156,15 @@ export function useDriverInbox() {
           replaceNotification(parsed)
         }
       })
+
+      if (sessionProfileId) {
+        userNotificationSubscriptionRef.current = client.subscribe(`/topic/user/${sessionProfileId}/notifications`, (message) => {
+          const parsed = parseJson<Notification>(message)
+          if (parsed) {
+            replaceNotification(parsed)
+          }
+        })
+      }
     }
 
     client.onStompError = (frame) => {
@@ -176,12 +188,14 @@ export function useDriverInbox() {
       alertSubscriptionRef.current = null
       notificationSubscriptionRef.current?.unsubscribe()
       notificationSubscriptionRef.current = null
+      userNotificationSubscriptionRef.current?.unsubscribe()
+      userNotificationSubscriptionRef.current = null
       void client.deactivate()
       if (clientRef.current === client) {
         clientRef.current = null
       }
     }
-  }, [inboxScope, replaceAlert, replaceNotification])
+  }, [inboxScope, replaceAlert, replaceNotification, sessionProfileId])
 
   return {
     alerts,

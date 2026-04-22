@@ -33,6 +33,7 @@ export interface Vehicle {
   type: string
   status: VehicleStatus
   location: string
+  assignedRegion: string
   fuelLevel: number
   mileage: number
   driverId: string
@@ -43,6 +44,9 @@ export interface Driver {
   name: string
   status: 'On Duty' | 'Off Duty' | 'Resting'
   licenseType: string
+  licenseNumber: string
+  licenseExpiryDate: string
+  assignedShift: string
   phone?: string | null
   assignedVehicleId?: string
   hoursDrivenToday: number
@@ -476,6 +480,13 @@ export interface AnalyticsTrend {
   note: string
 }
 
+export interface AnalyticsTimelinePoint {
+  label: string
+  totalTrips: number
+  completedTrips: number
+  delayedTrips: number
+}
+
 export interface TripAnalyticsRow {
   tripId: string
   routeId: string
@@ -503,6 +514,7 @@ export interface TripAnalytics {
   completedTrips: number
   cancelledTrips: number
   delayedTrips: number
+  tripVolumeTrend: AnalyticsTimelinePoint[]
   delayTrends: AnalyticsTrend[]
   alertFrequencyByCategory: AnalyticsTrend[]
   recentTrips: TripAnalyticsRow[]
@@ -699,6 +711,7 @@ export interface AdminDashboardActivity {
 }
 
 export type NotificationCategory =
+  | 'BROADCAST_MESSAGE'
   | 'CRITICAL_ALERT'
   | 'DRIVER_ISSUE'
   | 'SOS_EMERGENCY'
@@ -721,10 +734,46 @@ export interface Notification {
   entityId: string
   tripId?: string | null
   vehicleId?: string | null
+  recipientUserId?: string | null
   metadataJson?: string | null
   createdAt: string
   readAt?: string | null
   read: boolean
+}
+
+export interface SystemConfigEntry {
+  key: string
+  category: string
+  label: string
+  description: string
+  value: string
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface UpdateSystemConfigInput {
+  entries: Array<{
+    key: string
+    value: string
+  }>
+}
+
+export interface NotificationBroadcast {
+  id: string
+  title: string
+  message: string
+  severity: NotificationSeverity
+  targetRoles: AppRole[]
+  recipientCount: number
+  createdBy: string
+  createdAt: string
+}
+
+export interface CreateNotificationBroadcastInput {
+  title: string
+  message: string
+  severity: NotificationSeverity
+  targetRoles: AppRole[]
 }
 
 export interface MaintenanceAlert {
@@ -829,6 +878,7 @@ export interface CreateVehicleInput {
   type: string
   status: VehicleStatus
   location: string
+  assignedRegion?: string
   fuelLevel: number
   mileage: number
   driverId: string
@@ -840,6 +890,10 @@ export interface CreateDriverInput {
   name: string
   status: Driver['status']
   licenseType: string
+  licenseNumber: string
+  licenseExpiryDate: string
+  assignedShift: string
+  phone: string
   assignedVehicleId: string
   hoursDrivenToday: number
 }
@@ -860,6 +914,7 @@ export interface AssignShiftInput {
   driverId: string
   assignedVehicleId: string
   status: Driver['status']
+  assignedShift?: string
 }
 
 export interface UpdateProfileInput {

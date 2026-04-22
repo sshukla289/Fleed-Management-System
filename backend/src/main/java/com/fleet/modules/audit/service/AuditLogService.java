@@ -67,14 +67,12 @@ public class AuditLogService {
         Map<String, Object> details
     ) {
         AuditLog auditLog = new AuditLog();
-        auditLog.setId(nextId());
         auditLog.setActor(actor == null || actor.isBlank() ? "system" : actor.trim());
         auditLog.setAction(action);
         auditLog.setEntityType(entityType);
         auditLog.setEntityId(entityId);
         auditLog.setSummary(summary);
         auditLog.setDetailsJson(toJson(details));
-        auditLog.setCreatedAt(LocalDateTime.now());
         return toDto(auditLogRepository.save(auditLog));
     }
 
@@ -100,27 +98,6 @@ public class AuditLogService {
             auditLog.getDetailsJson(),
             auditLog.getCreatedAt()
         );
-    }
-
-    private String nextId() {
-        int nextNumber = auditLogRepository.findAll().stream()
-            .map(AuditLog::getId)
-            .mapToInt(id -> parseNumericSuffix(id, "AU-"))
-            .max()
-            .orElse(0) + 1;
-        return "AU-" + nextNumber;
-    }
-
-    private int parseNumericSuffix(String id, String prefix) {
-        if (id == null || !id.startsWith(prefix)) {
-            return 0;
-        }
-
-        try {
-            return Integer.parseInt(id.substring(prefix.length()));
-        } catch (NumberFormatException exception) {
-            return 0;
-        }
     }
 
     private String toJson(Map<String, Object> details) {

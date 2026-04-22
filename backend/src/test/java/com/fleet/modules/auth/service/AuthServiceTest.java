@@ -3,11 +3,13 @@ package com.fleet.modules.auth.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fleet.modules.audit.service.AuditLogService;
 import com.fleet.modules.auth.dto.AuthResponse;
 import com.fleet.modules.auth.dto.LoginRequest;
 import com.fleet.modules.auth.entity.AppUser;
@@ -41,6 +43,9 @@ class AuthServiceTest {
     @Mock
     private DriverRepository driverRepository;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     private AuthService authService;
 
     @BeforeEach
@@ -50,7 +55,8 @@ class AuthServiceTest {
             passwordEncoder,
             authSessionService,
             currentUserService,
-            driverRepository
+            driverRepository,
+            auditLogService
         );
     }
 
@@ -67,6 +73,14 @@ class AuthServiceTest {
         assertEquals("token-123", response.token());
         assertEquals("operations_manager@gmail.com", response.profile().email());
         verify(authSessionService).revokeSessionsForUser("USR-1");
+        verify(auditLogService).record(
+            eq("operations_manager@gmail.com"),
+            eq("USER_LOGIN"),
+            eq("APP_USER"),
+            eq("USR-1"),
+            eq("User logged in."),
+            any()
+        );
     }
 
     @Test

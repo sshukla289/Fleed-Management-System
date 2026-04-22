@@ -63,6 +63,11 @@ public class WebSocketTrackingChannelInterceptor implements ChannelInterceptor {
                 ensureDriverTopicSubscriptionAllowed(user, driverId);
             }
 
+            String userId = extractUserTopicId(destination);
+            if (userId != null) {
+                ensureUserTopicSubscriptionAllowed(user, userId);
+            }
+
             String opsChannel = extractOpsTopic(destination);
             if (opsChannel != null) {
                 ensureOperationsTopicSubscriptionAllowed(user, opsChannel);
@@ -141,6 +146,32 @@ public class WebSocketTrackingChannelInterceptor implements ChannelInterceptor {
         AppRole role = AppRole.fromStoredValue(user.getRole());
         if (role == AppRole.DRIVER && !user.getId().equalsIgnoreCase(driverId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver subscriptions are limited to the authenticated driver's inbox.");
+        }
+    }
+
+    private String extractUserTopicId(String destination) {
+        if (destination == null || !destination.startsWith("/topic/user/")) {
+            return null;
+        }
+
+        String suffix = destination.substring("/topic/user/".length()).trim();
+        int separatorIndex = suffix.indexOf('/');
+        if (separatorIndex <= 0) {
+            return null;
+        }
+
+        String userId = suffix.substring(0, separatorIndex).trim();
+        String channelName = suffix.substring(separatorIndex + 1).trim();
+        if (userId.isEmpty() || !"notifications".equals(channelName)) {
+            return null;
+        }
+
+        return userId;
+    }
+
+    private void ensureUserTopicSubscriptionAllowed(AppUser user, String userId) {
+        if (!user.getId().equalsIgnoreCase(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User subscriptions are limited to the authenticated inbox.");
         }
     }
 

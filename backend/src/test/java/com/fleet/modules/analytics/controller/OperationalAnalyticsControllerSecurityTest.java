@@ -45,7 +45,7 @@ class OperationalAnalyticsControllerSecurityTest {
     @Test
     void tripAnalyticsAllowsOperationsManagerRole() throws Exception {
         when(authSessionService.resolveUser("ops-token")).thenReturn(Optional.of(user("USR-1", "OPERATIONS_MANAGER")));
-        when(operationalAnalyticsService.getTripAnalytics(null, null, null)).thenReturn(new TripAnalyticsDTO(
+        when(operationalAnalyticsService.getTripAnalytics(null, null, null, null)).thenReturn(new TripAnalyticsDTO(
             LocalDateTime.now(),
             null,
             null,
@@ -60,6 +60,7 @@ class OperationalAnalyticsControllerSecurityTest {
             0,
             List.of(),
             List.of(),
+            List.of(),
             List.of()
         ));
 
@@ -69,7 +70,7 @@ class OperationalAnalyticsControllerSecurityTest {
             )
             .andExpect(status().isOk());
 
-        verify(operationalAnalyticsService).getTripAnalytics(null, null, null);
+        verify(operationalAnalyticsService).getTripAnalytics(null, null, null, null);
     }
 
     @Test
@@ -82,7 +83,7 @@ class OperationalAnalyticsControllerSecurityTest {
             )
             .andExpect(status().isForbidden());
 
-        verify(operationalAnalyticsService, never()).getTripAnalytics(null, null, null);
+        verify(operationalAnalyticsService, never()).getTripAnalytics(null, null, null, null);
     }
 
     private AppUser user(String id, String role) {

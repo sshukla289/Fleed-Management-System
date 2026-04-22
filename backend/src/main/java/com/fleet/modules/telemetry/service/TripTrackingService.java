@@ -4,6 +4,7 @@ import com.fleet.modules.alert.service.AlertService;
 import com.fleet.modules.auth.entity.AppUser;
 import com.fleet.modules.route.entity.RoutePlan;
 import com.fleet.modules.route.repository.RoutePlanRepository;
+import com.fleet.modules.system.service.SystemConfigService;
 import com.fleet.modules.telemetry.dto.DriverTrackingMessage;
 import com.fleet.modules.telemetry.entity.Telemetry;
 import com.fleet.modules.telemetry.repository.TelemetryRepository;
@@ -16,7 +17,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -29,13 +29,9 @@ public class TripTrackingService {
     private final TelemetryRepository telemetryRepository;
     private final RoutePlanRepository routePlanRepository;
     private final AlertService alertService;
-    private final double overspeedThresholdKph;
-    private final Duration idleThreshold;
+    private final SystemConfigService systemConfigService;
     private final double movementThresholdMeters;
     private final Duration persistInterval;
-    private final double routeDeviationThresholdMeters;
-    private final double routeRecoveryThresholdMeters;
-    private final Duration routeDeviationDebounce;
 
     public TripTrackingService(
         TripTrackingAccessService tripTrackingAccessService,
@@ -43,26 +39,18 @@ public class TripTrackingService {
         TelemetryRepository telemetryRepository,
         RoutePlanRepository routePlanRepository,
         AlertService alertService,
-        @Value("${app.tracking.overspeed-threshold-kph:80}") double overspeedThresholdKph,
-        @Value("${app.tracking.idle-threshold-seconds:120}") long idleThresholdSeconds,
-        @Value("${app.tracking.movement-threshold-meters:25}") double movementThresholdMeters,
-        @Value("${app.tracking.persist-interval-seconds:30}") long persistIntervalSeconds,
-        @Value("${app.tracking.route-deviation-threshold-meters:250}") double routeDeviationThresholdMeters,
-        @Value("${app.tracking.route-recovery-threshold-meters:150}") double routeRecoveryThresholdMeters,
-        @Value("${app.tracking.route-deviation-debounce-seconds:20}") long routeDeviationDebounceSeconds
+        SystemConfigService systemConfigService,
+        @org.springframework.beans.factory.annotation.Value("${app.tracking.movement-threshold-meters:25}") double movementThresholdMeters,
+        @org.springframework.beans.factory.annotation.Value("${app.tracking.persist-interval-seconds:30}") long persistIntervalSeconds
     ) {
         this.tripTrackingAccessService = tripTrackingAccessService;
         this.latestTripTrackingStore = latestTripTrackingStore;
         this.telemetryRepository = telemetryRepository;
         this.routePlanRepository = routePlanRepository;
         this.alertService = alertService;
-        this.overspeedThresholdKph = overspeedThresholdKph;
-        this.idleThreshold = Duration.ofSeconds(Math.max(30, idleThresholdSeconds));
+        this.systemConfigService = systemConfigService;
         this.movementThresholdMeters = Math.max(1, movementThresholdMeters);
         this.persistInterval = Duration.ofSeconds(Math.max(5, persistIntervalSeconds));
-        this.routeDeviationThresholdMeters = Math.max(25, routeDeviationThresholdMeters);
-        this.routeRecoveryThresholdMeters = Math.max(10, Math.min(this.routeDeviationThresholdMeters, routeRecoveryThresholdMeters));
-        this.routeDeviationDebounce = Duration.ofSeconds(Math.max(5, routeDeviationDebounceSeconds));
     }
 
     public TripTrackingSnapshot processDriverTracking(AppUser user, String tripId, DriverTrackingMessage message) {
@@ -77,6 +65,7 @@ public class TripTrackingService {
         Trip trip = tripTrackingAccessService.requireDriverOwnedTrip(user, tripId);
         TripTrackingSnapshot previous = latestTripTrackingStore.get(trip.getId()).orElse(null);
         LocalDateTime eventTime = resolveEventTime(message.getTimestamp());
+        SystemConfigService.TrackingSettings trackingSettings = systemConfigService.getTrackingSettings();
 
         Telemetry telemetry = new Telemetry();
         telemetry.setTripId(trip.getId());
@@ -98,10 +87,10 @@ public class TripTrackingService {
         snapshot.setSpeed(message.getSpeed());
         snapshot.setFuelLevel(telemetry.getFuelLevel());
         snapshot.setTimestamp(eventTime);
-        snapshot.setOverspeed(message.getSpeed() > overspeedThresholdKph);
+        snapshot.setOverspeed(message.getSpeed() > trackingSettings.speedLimitKph());
         updateMovementState(snapshot, previous, eventTime);
-        snapshot.setIdle(isIdle(snapshot, eventTime));
-        updateRouteDeviation(snapshot, previous, trip, eventTime);
+        snapshot.setIdle(isIdle(snapshot, eventTime, trackingSettings.idleThreshold()));
+        updateRouteDeviation(snapshot, previous, trip, eventTime, trackingSettings);
 
         if (shouldPersist(previous, eventTime)) {
             telemetryRepository.save(telemetry);
@@ -110,12 +99,12 @@ public class TripTrackingService {
 
         latestTripTrackingStore.save(snapshot);
         alertService.raiseTelemetryAlerts(telemetry);
-        maybeRaiseIdleAlert(snapshot, previous);
-        maybeRaiseRouteDeviationAlert(snapshot, previous);
+        maybeRaiseIdleAlert(snapshot, previous, trackingSettings.idleThreshold());
+        maybeRaiseRouteDeviationAlert(snapshot, previous, trackingSettings.routeDeviationThresholdMeters());
         return snapshot;
     }
 
-    private void maybeRaiseIdleAlert(TripTrackingSnapshot snapshot, TripTrackingSnapshot previous) {
+    private void maybeRaiseIdleAlert(TripTrackingSnapshot snapshot, TripTrackingSnapshot previous, Duration idleThreshold) {
         if (!snapshot.isIdle() || (previous != null && previous.isIdle())) {
             return;
         }
@@ -138,7 +127,11 @@ public class TripTrackingService {
         return Duration.between(previous.getLastPersistedAt(), eventTime).compareTo(persistInterval) >= 0;
     }
 
-    private void maybeRaiseRouteDeviationAlert(TripTrackingSnapshot snapshot, TripTrackingSnapshot previous) {
+    private void maybeRaiseRouteDeviationAlert(
+        TripTrackingSnapshot snapshot,
+        TripTrackingSnapshot previous,
+        double routeDeviationThresholdMeters
+    ) {
         if (snapshot.isRouteDeviation()) {
             if (previous == null || !previous.isRouteDeviation()) {
                 alertService.createRouteDeviationAlert(
@@ -171,7 +164,7 @@ public class TripTrackingService {
         snapshot.setLastMovementAt(previous.getLastMovementAt() != null ? previous.getLastMovementAt() : eventTime);
     }
 
-    private boolean isIdle(TripTrackingSnapshot snapshot, LocalDateTime eventTime) {
+    private boolean isIdle(TripTrackingSnapshot snapshot, LocalDateTime eventTime, Duration idleThreshold) {
         if (snapshot.getLastMovementAt() == null) {
             return false;
         }
@@ -183,7 +176,8 @@ public class TripTrackingService {
         TripTrackingSnapshot snapshot,
         TripTrackingSnapshot previous,
         Trip trip,
-        LocalDateTime eventTime
+        LocalDateTime eventTime,
+        SystemConfigService.TrackingSettings trackingSettings
     ) {
         RouteDeviationAssessment assessment = assessRouteDeviation(
             snapshot.getLatitude(),
@@ -204,19 +198,19 @@ public class TripTrackingService {
             ? previous.getLastOnRouteAt()
             : eventTime;
 
-        if (assessment.distanceMeters() <= routeRecoveryThresholdMeters) {
+        if (assessment.distanceMeters() <= trackingSettings.routeRecoveryThresholdMeters()) {
             snapshot.setLastOnRouteAt(eventTime);
             snapshot.setRouteDeviation(false);
             return;
         }
 
         snapshot.setLastOnRouteAt(lastOnRouteAt);
-        if (assessment.distanceMeters() < routeDeviationThresholdMeters) {
+        if (assessment.distanceMeters() < trackingSettings.routeDeviationThresholdMeters()) {
             snapshot.setRouteDeviation(previous != null && previous.isRouteDeviation());
             return;
         }
 
-        snapshot.setRouteDeviation(Duration.between(lastOnRouteAt, eventTime).compareTo(routeDeviationDebounce) >= 0);
+        snapshot.setRouteDeviation(Duration.between(lastOnRouteAt, eventTime).compareTo(trackingSettings.routeDeviationDebounce()) >= 0);
     }
 
     private void applyCurrentStop(TripTrackingSnapshot snapshot, List<TripStop> stops, com.fleet.modules.trip.entity.TripStatus tripStatus) {

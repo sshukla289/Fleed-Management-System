@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import { canManageVehicles } from '../security/permissions'
@@ -105,9 +106,9 @@ function statusPillClass(status: Vehicle['status']) {
 }
 
 export function VehicleList() {
+  const queryClient = useQueryClient()
   const { session } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicleId, setSelectedVehicleId] = useState('')
   const [statusFilter, setStatusFilter] = useState<'All' | Vehicle['status']>('All')
   const [showForm, setShowForm] = useState(false)
@@ -120,14 +121,17 @@ export function VehicleList() {
   const query = searchParams.get('q')?.trim().toLowerCase() ?? ''
   const canManage = canManageVehicles(session?.profile.role)
 
+  const vehiclesQuery = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: fetchVehicles,
+  })
+  const vehicles = vehiclesQuery.data ?? []
+
   useEffect(() => {
-    void fetchVehicles().then((vehicleData) => {
-      setVehicles(vehicleData)
-      if (vehicleData[0]) {
-        setSelectedVehicleId(vehicleData[0].id)
-      }
-    })
-  }, [])
+    if (vehicles[0] && !selectedVehicleId) {
+      setSelectedVehicleId(vehicles[0].id)
+    }
+  }, [selectedVehicleId, vehicles])
 
   const filteredVehicles = useMemo(
     () =>
@@ -189,13 +193,13 @@ export function VehicleList() {
     try {
       if (editingVehicleId) {
         const updatedVehicle = await updateVehicle(editingVehicleId, nextForm)
-        setVehicles((current) =>
+        queryClient.setQueryData<Vehicle[]>(['vehicles'], (current = []) =>
           current.map((vehicle) => (vehicle.id === updatedVehicle.id ? updatedVehicle : vehicle)),
         )
         setSelectedVehicleId(updatedVehicle.id)
       } else {
         const createdVehicle = await createVehicle(nextForm)
-        setVehicles((current) => [...current, createdVehicle])
+        queryClient.setQueryData<Vehicle[]>(['vehicles'], (current = []) => [...current, createdVehicle])
         setSelectedVehicleId(createdVehicle.id)
       }
 
@@ -210,7 +214,7 @@ export function VehicleList() {
 
     try {
       await deleteVehicle(vehicle.id)
-      setVehicles((current) => {
+      queryClient.setQueryData<Vehicle[]>(['vehicles'], (current = []) => {
         const remainingVehicles = current.filter((item) => item.id !== vehicle.id)
         if (selectedVehicleId === vehicle.id) {
           setSelectedVehicleId(remainingVehicles[0]?.id ?? '')

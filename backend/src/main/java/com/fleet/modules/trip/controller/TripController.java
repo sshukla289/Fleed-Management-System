@@ -86,8 +86,11 @@ public class TripController {
 
     @PostMapping("/{tripId}/dispatch")
     @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER')")
-    public ResponseEntity<TripDTO> dispatchTrip(@PathVariable String tripId) {
-        return ResponseEntity.ok(tripService.dispatchTrip(tripId));
+    public ResponseEntity<TripDTO> dispatchTrip(
+        @PathVariable String tripId,
+        @RequestParam(defaultValue = "false") boolean overrideValidation
+    ) {
+        return ResponseEntity.ok(tripService.dispatchTrip(tripId, overrideValidation));
     }
 
     @PostMapping("/{tripId}/start")

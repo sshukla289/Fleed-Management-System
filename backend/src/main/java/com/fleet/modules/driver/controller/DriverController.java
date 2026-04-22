@@ -28,31 +28,31 @@ public class DriverController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<List<DriverDTO>> getDrivers() {
         return ResponseEntity.ok(driverService.getDrivers());
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER')")
     public ResponseEntity<DriverDTO> createDriver(@RequestBody CreateDriverRequest request) {
         return ResponseEntity.ok(driverService.createDriver(request));
     }
 
     @PostMapping("/assign-shift")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER')")
     public ResponseEntity<DriverDTO> assignShift(@RequestBody AssignShiftRequest request) {
         return ResponseEntity.ok(driverService.assignShift(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER')")
     public ResponseEntity<DriverDTO> updateDriver(@PathVariable String id, @RequestBody UpdateDriverRequest request) {
         return ResponseEntity.ok(driverService.updateDriver(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER')")
     public ResponseEntity<Void> deleteDriver(@PathVariable String id) {
         driverService.deleteDriver(id);
         return ResponseEntity.noContent().build();

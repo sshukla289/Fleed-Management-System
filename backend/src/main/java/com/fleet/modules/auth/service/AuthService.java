@@ -1,5 +1,6 @@
 package com.fleet.modules.auth.service;
 
+import com.fleet.modules.audit.service.AuditLogService;
 import com.fleet.modules.auth.dto.AuthResponse;
 import com.fleet.modules.auth.dto.LoginRequest;
 import com.fleet.modules.auth.entity.AppRole;
@@ -8,9 +9,12 @@ import com.fleet.modules.auth.repository.AppUserRepository;
 import com.fleet.modules.driver.entity.Driver;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.profile.dto.ProfileDTO;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -21,21 +25,25 @@ public class AuthService {
     private final AuthSessionService authSessionService;
     private final CurrentUserService currentUserService;
     private final DriverRepository driverRepository;
+    private final AuditLogService auditLogService;
 
     public AuthService(
         AppUserRepository appUserRepository,
         PasswordEncoder passwordEncoder,
         AuthSessionService authSessionService,
         CurrentUserService currentUserService,
-        DriverRepository driverRepository
+        DriverRepository driverRepository,
+        AuditLogService auditLogService
     ) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.authSessionService = authSessionService;
         this.currentUserService = currentUserService;
         this.driverRepository = driverRepository;
+        this.auditLogService = auditLogService;
     }
 
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         if (
             request == null ||
@@ -64,6 +72,17 @@ public class AuthService {
 
         authSessionService.revokeSessionsForUser(user.getId());
         String token = authSessionService.createSession(user);
+        auditLogService.record(
+            user.getLoginEmail(),
+            "USER_LOGIN",
+            "APP_USER",
+            user.getId(),
+            "User logged in.",
+            details(
+                "role", AppRole.fromStoredValue(user.getRole()).name(),
+                "email", user.getEmail()
+            )
+        );
         return new AuthResponse(token, toProfile(user));
     }
 
@@ -71,12 +90,27 @@ public class AuthService {
         return toProfile(currentUserService.getRequiredUser());
     }
 
+    @Transactional
     public void logout(String token) {
         if (token == null || token.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Authorization token is required.");
         }
 
+        AppUser user = authSessionService.resolveUser(token).orElse(null);
         authSessionService.revokeSession(token);
+        if (user != null) {
+            auditLogService.record(
+                user.getLoginEmail(),
+                "USER_LOGOUT",
+                "APP_USER",
+                user.getId(),
+                "User logged out.",
+                details(
+                    "role", AppRole.fromStoredValue(user.getRole()).name(),
+                    "email", user.getEmail()
+                )
+            );
+        }
     }
 
     private AppUser findUserForLogin(String normalizedEmail) {
@@ -132,5 +166,22 @@ public class AuthService {
             .map(Driver::getName)
             .filter(name -> name != null && !name.isBlank())
             .orElse(user.getName());
+    }
+
+    private Map<String, Object> details(Object... items) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        if (items == null) {
+            return values;
+        }
+
+        for (int index = 0; index < items.length; index += 2) {
+            Object key = items[index];
+            Object value = index + 1 < items.length ? items[index + 1] : null;
+            if (key != null && value != null) {
+                values.put(String.valueOf(key), value);
+            }
+        }
+
+        return values;
     }
 }

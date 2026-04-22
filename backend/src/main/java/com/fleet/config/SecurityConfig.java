@@ -50,7 +50,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                 .requestMatchers("/api/trips/**").hasAnyRole("ADMIN", "OPERATIONS_MANAGER", "DISPATCHER", "PLANNER", "MAINTENANCE_MANAGER", "DRIVER")
-                .requestMatchers("/api/vehicles/**").hasAnyRole("MAINTENANCE_MANAGER", "ADMIN")
+                .requestMatchers("/api/vehicles/**").hasAnyRole("ADMIN", "OPERATIONS_MANAGER", "DISPATCHER", "PLANNER", "MAINTENANCE_MANAGER", "DRIVER")
+                .requestMatchers("/api/drivers/**").hasAnyRole("ADMIN", "OPERATIONS_MANAGER", "DISPATCHER", "PLANNER", "MAINTENANCE_MANAGER", "DRIVER")
+                .requestMatchers("/api/routes/**").hasAnyRole("ADMIN", "OPERATIONS_MANAGER", "DISPATCHER", "PLANNER", "MAINTENANCE_MANAGER", "DRIVER")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(authTokenFilter, UsernamePasswordAuthenticationFilter.class);

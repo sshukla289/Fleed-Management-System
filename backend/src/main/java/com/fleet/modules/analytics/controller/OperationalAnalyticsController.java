@@ -36,9 +36,12 @@ public class OperationalAnalyticsController {
         LocalDateTime endDate,
 
         @RequestParam(required = false)
-        TripStatus status
+        TripStatus status,
+
+        @RequestParam(required = false)
+        String region
     ) {
-        return ResponseEntity.ok(operationalAnalyticsService.getTripAnalytics(startDate, endDate, status));
+        return ResponseEntity.ok(operationalAnalyticsService.getTripAnalytics(startDate, endDate, status, region));
     }
 
     @GetMapping("/vehicles")
@@ -50,9 +53,12 @@ public class OperationalAnalyticsController {
 
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-        LocalDateTime endDate
+        LocalDateTime endDate,
+
+        @RequestParam(required = false)
+        String region
     ) {
-        return ResponseEntity.ok(operationalAnalyticsService.getVehicleAnalytics(startDate, endDate));
+        return ResponseEntity.ok(operationalAnalyticsService.getVehicleAnalytics(startDate, endDate, region));
     }
 
     @GetMapping("/drivers")
@@ -64,8 +70,11 @@ public class OperationalAnalyticsController {
 
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-        LocalDateTime endDate
+        LocalDateTime endDate,
+
+        @RequestParam(required = false)
+        String region
     ) {
-        return ResponseEntity.ok(operationalAnalyticsService.getDriverAnalytics(startDate, endDate));
+        return ResponseEntity.ok(operationalAnalyticsService.getDriverAnalytics(startDate, endDate, region));
     }
 }

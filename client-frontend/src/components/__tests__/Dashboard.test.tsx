@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { Dashboard } from '../../pages/Dashboard'
 
@@ -15,7 +16,13 @@ jest.mock('../../services/apiService', () => ({
 }))
 
 describe('Dashboard', () => {
+  let queryClient: QueryClient
+
   beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
     fetchDashboardAnalyticsMock.mockResolvedValue({
       generatedAt: '2026-04-09T09:00:00',
       kpis: [
@@ -127,9 +134,11 @@ describe('Dashboard', () => {
 
   it('renders the operational control tower and KPI cards', async () => {
     render(
-      <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-        <Dashboard />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+          <Dashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
 
@@ -141,9 +150,11 @@ describe('Dashboard', () => {
 
   it('renders the action queue, exception list, and maintenance visibility', async () => {
     render(
-      <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-        <Dashboard />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+          <Dashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     expect(await screen.findByText(/monitor trip trip-1001/i)).toBeInTheDocument()

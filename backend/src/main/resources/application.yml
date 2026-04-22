@@ -54,6 +54,8 @@ app:
     email:
       enabled: ${APP_POD_EMAIL_ENABLED:false}
       from: ${APP_POD_EMAIL_FROM:${SPRING_MAIL_USERNAME:}}
+  alerts:
+    low-fuel-threshold-percent: ${APP_ALERTS_LOW_FUEL_THRESHOLD_PERCENT:10}
 
 server:
   port: ${SERVER_PORT:8080}

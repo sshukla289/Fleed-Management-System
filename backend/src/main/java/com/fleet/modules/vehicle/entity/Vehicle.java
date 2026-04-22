@@ -15,6 +15,7 @@ public class Vehicle {
     private String type;
     private String status;
     private String location;
+    private String assignedRegion;
     private int fuelLevel;
     private int mileage;
     private String driverId;
@@ -28,6 +29,7 @@ public class Vehicle {
         String type,
         String status,
         String location,
+        String assignedRegion,
         int fuelLevel,
         int mileage,
         String driverId
@@ -37,6 +39,7 @@ public class Vehicle {
         this.type = type;
         this.status = status;
         this.location = location;
+        this.assignedRegion = assignedRegion;
         this.fuelLevel = fuelLevel;
         this.mileage = mileage;
         this.driverId = driverId;
@@ -80,6 +83,14 @@ public class Vehicle {
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    public String getAssignedRegion() {
+        return assignedRegion;
+    }
+
+    public void setAssignedRegion(String assignedRegion) {
+        this.assignedRegion = assignedRegion;
     }
 
     public int getFuelLevel() {

@@ -1,6 +1,7 @@
 package com.fleet.modules.notification.entity;
 
 public enum NotificationCategory {
+    BROADCAST_MESSAGE,
     CRITICAL_ALERT,
     DRIVER_ISSUE,
     SOS_EMERGENCY,

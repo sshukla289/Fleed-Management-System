@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { RoutePreviewMap } from '../components/RoutePreviewMap'
 import {
@@ -129,8 +130,8 @@ function formatDistanceInput(value: string) {
 }
 
 export function RoutePlanner() {
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
-  const [routes, setRoutes] = useState<RoutePlan[]>([])
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -141,20 +142,21 @@ export function RoutePlanner() {
   const [successMessage, setSuccessMessage] = useState('')
   const [form, setForm] = useState<CreateRoutePlanInput>(initialForm)
 
+  const routesQuery = useQuery({
+    queryKey: ['routes'],
+    queryFn: fetchRoutePlans,
+  })
+  const routes = routesQuery.data ?? []
+
   useEffect(() => {
-    async function loadRoutes() {
-      const routeData = await fetchRoutePlans()
-      setRoutes(routeData)
+    const highlightedRouteId = searchParams.get('highlight')
+    const initialSelectedRoute =
+      routes.find((route) => route.id === highlightedRouteId)?.id ?? routes[0]?.id ?? null
 
-      const highlightedRouteId = searchParams.get('highlight')
-      const initialSelectedRoute =
-        routeData.find((route) => route.id === highlightedRouteId)?.id ?? routeData[0]?.id ?? null
-
+    if (!selectedRouteId || (selectedRouteId && !routes.some((route) => route.id === selectedRouteId))) {
       setSelectedRouteId(initialSelectedRoute)
     }
-
-    void loadRoutes()
-  }, [searchParams])
+  }, [routes, searchParams, selectedRouteId])
 
   const highlightedRouteId = searchParams.get('highlight')
   const orderedRoutes = [...routes].sort((left, right) => {
@@ -184,7 +186,7 @@ export function RoutePlanner() {
 
     try {
       const nextRoutes = await optimizeRoutes()
-      setRoutes(nextRoutes)
+      queryClient.setQueryData<RoutePlan[]>(['routes'], nextRoutes)
 
       if (nextRoutes[0]) {
         setSelectedRouteId((current) =>
@@ -248,11 +250,13 @@ export function RoutePlanner() {
     try {
       if (editingRouteId) {
         const updatedRoute = await updateRoutePlan(editingRouteId, nextForm)
-        setRoutes((current) => current.map((route) => (route.id === updatedRoute.id ? updatedRoute : route)))
+        queryClient.setQueryData<RoutePlan[]>(['routes'], (current = []) =>
+          current.map((route) => (route.id === updatedRoute.id ? updatedRoute : route)),
+        )
         setSelectedRouteId(updatedRoute.id)
       } else {
         const createdRoute = await createRoutePlan(nextForm)
-        setRoutes((current) => [...current, createdRoute])
+        queryClient.setQueryData<RoutePlan[]>(['routes'], (current = []) => [...current, createdRoute])
         setSelectedRouteId(createdRoute.id)
       }
 
@@ -269,7 +273,7 @@ export function RoutePlanner() {
 
     try {
       await deleteRoutePlan(route.id)
-      setRoutes((current) => current.filter((item) => item.id !== route.id))
+      queryClient.setQueryData<RoutePlan[]>(['routes'], (current = []) => current.filter((item) => item.id !== route.id))
 
       if (selectedRouteId === route.id) {
         const remainingRoutes = orderedRoutes.filter((item) => item.id !== route.id)

@@ -46,24 +46,31 @@ public class TripDispatchService {
 
     @Transactional
     public Trip dispatch(Trip trip) {
+        return dispatch(trip, false);
+    }
+
+    @Transactional
+    public Trip dispatch(Trip trip, boolean overrideValidation) {
         ensureDispatchable(trip);
         ensureAssignmentsPresent(trip);
 
         ComplianceCheckResultDTO complianceResult = complianceService.evaluateTrip(trip);
         trip.setComplianceStatus(complianceResult.complianceStatus());
         if (!complianceResult.compliant()) {
-            trip.setStatus(TripStatus.BLOCKED);
-            trip.setDispatchStatus(TripDispatchStatus.NOT_DISPATCHED);
             notificationService.notifyComplianceReminder(
                 trip.getId(),
                 trip.getAssignedVehicleId(),
                 "Trip " + trip.getId() + " is blocked by compliance checks.",
                 complianceMetadata(complianceResult)
             );
-            throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                String.join(" ", complianceResult.blockingReasons())
-            );
+            if (!overrideValidation) {
+                trip.setStatus(TripStatus.BLOCKED);
+                trip.setDispatchStatus(TripDispatchStatus.NOT_DISPATCHED);
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    String.join(" ", complianceResult.blockingReasons())
+                );
+            }
         }
 
         Vehicle vehicle = vehicleRepository.findById(trip.getAssignedVehicleId())

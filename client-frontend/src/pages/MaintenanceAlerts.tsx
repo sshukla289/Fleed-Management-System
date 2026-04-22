@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useQueries, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import { canManageMaintenance } from '../security/permissions'
@@ -28,10 +29,9 @@ function severityClass(severity: MaintenanceAlert['severity']) {
 }
 
 export function MaintenanceAlerts() {
+  const queryClient = useQueryClient()
   const { session } = useAuth()
   const [searchParams] = useSearchParams()
-  const [alerts, setAlerts] = useState<MaintenanceAlert[]>([])
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(searchParams.get('openCreate') === '1')
   const [editingAlertId, setEditingAlertId] = useState<string | null>(null)
   const [deletingAlertId, setDeletingAlertId] = useState<string | null>(null)
@@ -45,28 +45,27 @@ export function MaintenanceAlerts() {
     description: '',
   })
 
+  const [alertsQuery, vehiclesQuery] = useQueries({
+    queries: [
+      { queryKey: ['maintenance-alerts'], queryFn: fetchMaintenanceAlerts },
+      { queryKey: ['vehicles'], queryFn: fetchVehicles },
+    ],
+  })
+
+  const alerts = useMemo(() => (alertsQuery.data as MaintenanceAlert[] | undefined) ?? [], [alertsQuery.data])
+  const vehicles = useMemo(() => (vehiclesQuery.data as Vehicle[] | undefined) ?? [], [vehiclesQuery.data])
+
   useEffect(() => {
-    async function loadMaintenanceData() {
-      const [alertData, vehicleData] = await Promise.all([
-        fetchMaintenanceAlerts(),
-        fetchVehicles(),
-      ])
+    const requestedVehicleId = searchParams.get('vehicleId')
+    const preferredVehicleId =
+      vehicles.find((vehicle) => vehicle.id === requestedVehicleId)?.id ??
+      vehicles[0]?.id ??
+      ''
 
-      setAlerts(alertData)
-      setVehicles(vehicleData)
-      const requestedVehicleId = searchParams.get('vehicleId')
-      const preferredVehicleId =
-        vehicleData.find((vehicle) => vehicle.id === requestedVehicleId)?.id ??
-        vehicleData[0]?.id ??
-        ''
-
-      if (preferredVehicleId) {
-        setForm((current) => ({ ...current, vehicleId: preferredVehicleId }))
-      }
+    if (preferredVehicleId) {
+      setForm((current) => ({ ...current, vehicleId: current.vehicleId || preferredVehicleId }))
     }
-
-    void loadMaintenanceData()
-  }, [searchParams])
+  }, [searchParams, vehicles])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -75,10 +74,12 @@ export function MaintenanceAlerts() {
     try {
       if (editingAlertId) {
         const updatedAlert = await updateMaintenanceAlert(editingAlertId, form)
-        setAlerts((current) => current.map((alert) => (alert.id === updatedAlert.id ? updatedAlert : alert)))
+        queryClient.setQueryData<MaintenanceAlert[]>(['maintenance-alerts'], (current = []) =>
+          current.map((alert) => (alert.id === updatedAlert.id ? updatedAlert : alert)),
+        )
       } else {
         const createdAlert = await createMaintenanceAlert(form)
-        setAlerts((current) => [...current, createdAlert])
+        queryClient.setQueryData<MaintenanceAlert[]>(['maintenance-alerts'], (current = []) => [...current, createdAlert])
       }
 
       resetForm()
@@ -93,7 +94,9 @@ export function MaintenanceAlerts() {
 
     try {
       await deleteMaintenanceAlert(alert.id)
-      setAlerts((current) => current.filter((item) => item.id !== alert.id))
+      queryClient.setQueryData<MaintenanceAlert[]>(['maintenance-alerts'], (current = []) =>
+        current.filter((item) => item.id !== alert.id),
+      )
       if (editingAlertId === alert.id) {
         resetForm()
       }

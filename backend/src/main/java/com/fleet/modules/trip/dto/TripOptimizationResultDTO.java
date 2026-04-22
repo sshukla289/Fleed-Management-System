@@ -6,7 +6,7 @@ import java.util.List;
 public record TripOptimizationResultDTO(
     String tripId,
     TripOptimizationStatus optimizationStatus,
-    List<String> optimizedStops,
+    List<TripStopDTO> optimizedStops,
     int estimatedDistance,
     String estimatedDuration,
     int routeScore,

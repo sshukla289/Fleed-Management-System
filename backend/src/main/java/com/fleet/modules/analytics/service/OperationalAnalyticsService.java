@@ -3,6 +3,7 @@ package com.fleet.modules.analytics.service;
 import com.fleet.modules.alert.entity.Alert;
 import com.fleet.modules.alert.entity.AlertCategory;
 import com.fleet.modules.alert.repository.AlertRepository;
+import com.fleet.modules.analytics.dto.AnalyticsTimelinePointDTO;
 import com.fleet.modules.analytics.dto.AnalyticsTrendDTO;
 import com.fleet.modules.analytics.dto.DashboardKpiDTO;
 import com.fleet.modules.analytics.dto.DriverAnalyticsDTO;
@@ -30,10 +31,13 @@ import com.fleet.modules.vehicle.entity.Vehicle;
 import com.fleet.modules.vehicle.entity.VehicleOperationalStatus;
 import com.fleet.modules.vehicle.repository.VehicleRepository;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +49,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class OperationalAnalyticsService {
+
+    private static final DateTimeFormatter SHORT_DAY_FORMAT = DateTimeFormatter.ofPattern("dd MMM", Locale.ROOT);
 
     private final TripRepository tripRepository;
     private final VehicleRepository vehicleRepository;
@@ -72,11 +78,13 @@ public class OperationalAnalyticsService {
         this.currentUserService = currentUserService;
     }
 
-    public TripAnalyticsDTO getTripAnalytics(LocalDateTime startDate, LocalDateTime endDate, TripStatus status) {
-        List<Trip> trips = filteredTrips(startDate, endDate, status);
+    public TripAnalyticsDTO getTripAnalytics(LocalDateTime startDate, LocalDateTime endDate, TripStatus status, String region) {
+        Map<String, Vehicle> vehiclesById = vehiclesById();
+        List<Trip> trips = filteredTrips(startDate, endDate, status, region, vehiclesById);
         List<Trip> completedTrips = trips.stream().filter(trip -> trip.getStatus() == TripStatus.COMPLETED).toList();
         List<Trip> cancelledTrips = trips.stream().filter(trip -> trip.getStatus() == TripStatus.CANCELLED).toList();
-        List<Trip> delayedTrips = trips.stream().filter(trip -> isDelayed(trip, now())).toList();
+        LocalDateTime generatedAt = now();
+        List<Trip> delayedTrips = trips.stream().filter(trip -> isDelayed(trip, generatedAt)).toList();
 
         long onTimeCompleted = completedTrips.stream()
             .filter(trip -> trip.getActualEndTime() != null && trip.getPlannedEndTime() != null && !trip.getActualEndTime().isAfter(trip.getPlannedEndTime()))
@@ -89,15 +97,21 @@ public class OperationalAnalyticsService {
         double tripSuccessRate = terminalTrips == 0
             ? 0.0
             : roundPercent(completedTrips.size() * 100.0 / terminalTrips);
-        double averageDelayMinutes = roundOneDecimal(delayedTrips.stream().mapToLong(trip -> delayMinutes(trip, now())).average().orElse(0.0));
+        double averageDelayMinutes = roundOneDecimal(delayedTrips.stream().mapToLong(trip -> delayMinutes(trip, generatedAt)).average().orElse(0.0));
         double fuelEfficiency = calculateFuelEfficiency(completedTrips);
+        String normalizedRegion = normalizeRegion(region);
+        Set<String> scopedTripIds = trips.stream()
+            .map(Trip::getId)
+            .filter(id -> id != null && !id.isBlank())
+            .collect(Collectors.toSet());
 
         Map<String, Long> alertCounts = alertRepository.findAll().stream()
             .filter(alert -> isWithinRange(alert.getCreatedAt(), startDate, endDate))
+            .filter(alert -> matchesAlertRegion(alert, normalizedRegion, vehiclesById, scopedTripIds))
             .collect(Collectors.groupingBy(alert -> alert.getCategory().name(), Collectors.counting()));
 
         return new TripAnalyticsDTO(
-            now(),
+            generatedAt,
             startDate,
             endDate,
             status == null ? "ALL" : status.name(),
@@ -116,6 +130,7 @@ public class OperationalAnalyticsService {
             completedTrips.size(),
             cancelledTrips.size(),
             delayedTrips.size(),
+            buildTripVolumeTrend(trips, generatedAt),
             buildDelayBuckets(delayedTrips),
             buildCategoryTrends(alertCounts, "alerts"),
             trips.stream()
@@ -129,14 +144,21 @@ public class OperationalAnalyticsService {
         );
     }
 
-    public VehicleAnalyticsDTO getVehicleAnalytics(LocalDateTime startDate, LocalDateTime endDate) {
-        List<Trip> trips = filteredTrips(startDate, endDate, null);
-        List<Vehicle> vehicles = vehicleRepository.findAll();
+    public VehicleAnalyticsDTO getVehicleAnalytics(LocalDateTime startDate, LocalDateTime endDate, String region) {
+        Map<String, Vehicle> vehiclesById = vehiclesById();
+        List<Trip> trips = filteredTrips(startDate, endDate, null, region, vehiclesById);
+        String normalizedRegion = normalizeRegion(region);
+        List<Vehicle> vehicles = vehiclesById.values().stream()
+            .filter(vehicle -> matchesVehicleRegion(vehicle, normalizedRegion))
+            .sorted(Comparator.comparing(Vehicle::getName))
+            .toList();
         Map<String, List<Trip>> tripsByVehicle = trips.stream()
             .filter(trip -> trip.getAssignedVehicleId() != null)
             .collect(Collectors.groupingBy(Trip::getAssignedVehicleId));
 
-        List<MaintenanceScheduleDTO> schedules = maintenanceScheduleService.getSchedules();
+        List<MaintenanceScheduleDTO> schedules = maintenanceScheduleService.getSchedules().stream()
+            .filter(schedule -> matchesVehicleRegion(vehiclesById.get(schedule.vehicleId()), normalizedRegion))
+            .toList();
         Map<String, MaintenanceScheduleDTO> blockingByVehicle = schedules.stream()
             .filter(schedule -> schedule.blockDispatch() && List.of(MaintenanceScheduleStatus.PLANNED, MaintenanceScheduleStatus.IN_PROGRESS).contains(schedule.status()))
             .collect(Collectors.toMap(
@@ -203,14 +225,17 @@ public class OperationalAnalyticsService {
         );
     }
 
-    public DriverAnalyticsDTO getDriverAnalytics(LocalDateTime startDate, LocalDateTime endDate) {
-        List<Trip> trips = filteredTrips(startDate, endDate, null);
+    public DriverAnalyticsDTO getDriverAnalytics(LocalDateTime startDate, LocalDateTime endDate, String region) {
+        Map<String, Vehicle> vehiclesById = vehiclesById();
+        List<Trip> trips = filteredTrips(startDate, endDate, null, region, vehiclesById);
+        String normalizedRegion = normalizeRegion(region);
         List<Driver> drivers = driverRepository.findAll();
         Map<String, List<Trip>> tripsByDriver = trips.stream()
             .filter(trip -> trip.getAssignedDriverId() != null)
             .collect(Collectors.groupingBy(Trip::getAssignedDriverId));
 
         List<DriverAnalyticsRowDTO> rows = drivers.stream()
+            .filter(driver -> matchesDriverRegion(driver, normalizedRegion, vehiclesById, tripsByDriver.containsKey(driver.getId())))
             .map(driver -> {
                 List<Trip> driverTrips = tripsByDriver.getOrDefault(driver.getId(), List.of());
                 long completedTrips = driverTrips.stream().filter(trip -> trip.getStatus() == TripStatus.COMPLETED).count();
@@ -240,9 +265,9 @@ public class OperationalAnalyticsService {
             ? 0.0
             : roundPercent(rows.stream().mapToDouble(DriverAnalyticsRowDTO::productivityPercent).average().orElse(0.0));
 
-        Map<String, Long> dutyTrend = drivers.stream()
+        Map<String, Long> dutyTrend = rows.stream()
             .collect(Collectors.groupingBy(
-                driver -> driver.getStatus() == null ? "Unknown" : driver.getStatus(),
+                row -> row.status() == null ? "Unknown" : row.status(),
                 Collectors.counting()
             ));
 
@@ -408,6 +433,132 @@ public class OperationalAnalyticsService {
             .toList();
     }
 
+    private List<Trip> filteredTrips(
+        LocalDateTime startDate,
+        LocalDateTime endDate,
+        TripStatus status,
+        String region,
+        Map<String, Vehicle> vehiclesById
+    ) {
+        String normalizedRegion = normalizeRegion(region);
+        return tripRepository.findAll().stream()
+            .filter(trip -> status == null || trip.getStatus() == status)
+            .filter(trip -> matchesTripRegion(trip, normalizedRegion, vehiclesById))
+            .filter(trip -> isTripWithinRange(trip, startDate, endDate))
+            .sorted(Comparator.comparing(this::referenceTime, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+            .toList();
+    }
+
+    private Map<String, Vehicle> vehiclesById() {
+        return vehicleRepository.findAll().stream()
+            .collect(Collectors.toMap(
+                Vehicle::getId,
+                Function.identity(),
+                (left, right) -> left
+            ));
+    }
+
+    private String normalizeRegion(String region) {
+        if (region == null || region.isBlank() || "ALL".equalsIgnoreCase(region.trim())) {
+            return null;
+        }
+
+        return region.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean matchesDriverRegion(
+        Driver driver,
+        String normalizedRegion,
+        Map<String, Vehicle> vehiclesById,
+        boolean hasScopedTrips
+    ) {
+        if (normalizedRegion == null) {
+            return true;
+        }
+
+        if (hasScopedTrips) {
+            return true;
+        }
+
+        if (driver == null || driver.getAssignedVehicleId() == null || driver.getAssignedVehicleId().isBlank()) {
+            return false;
+        }
+
+        return matchesVehicleRegion(vehiclesById.get(driver.getAssignedVehicleId()), normalizedRegion);
+    }
+
+    private boolean matchesTripRegion(Trip trip, String normalizedRegion, Map<String, Vehicle> vehiclesById) {
+        if (normalizedRegion == null) {
+            return true;
+        }
+
+        if (trip == null) {
+            return false;
+        }
+
+        Vehicle vehicle = trip.getAssignedVehicleId() == null ? null : vehiclesById.get(trip.getAssignedVehicleId());
+        if (matchesVehicleRegion(vehicle, normalizedRegion)) {
+            return true;
+        }
+
+        return matchesRegionValue(normalizedRegion, trip.getSource(), trip.getDestination());
+    }
+
+    private boolean matchesAlertRegion(
+        Alert alert,
+        String normalizedRegion,
+        Map<String, Vehicle> vehiclesById,
+        Set<String> scopedTripIds
+    ) {
+        if (normalizedRegion == null) {
+            return true;
+        }
+
+        if (alert == null) {
+            return false;
+        }
+
+        if (alert.getRelatedTripId() != null && scopedTripIds.contains(alert.getRelatedTripId())) {
+            return true;
+        }
+
+        if (alert.getSourceId() != null && scopedTripIds.contains(alert.getSourceId())) {
+            return true;
+        }
+
+        if (matchesVehicleRegion(alert.getRelatedVehicleId() == null ? null : vehiclesById.get(alert.getRelatedVehicleId()), normalizedRegion)) {
+            return true;
+        }
+
+        return matchesVehicleRegion(alert.getSourceId() == null ? null : vehiclesById.get(alert.getSourceId()), normalizedRegion);
+    }
+
+    private boolean matchesVehicleRegion(Vehicle vehicle, String normalizedRegion) {
+        if (normalizedRegion == null) {
+            return true;
+        }
+
+        if (vehicle == null) {
+            return false;
+        }
+
+        return matchesRegionValue(normalizedRegion, vehicle.getAssignedRegion(), vehicle.getLocation());
+    }
+
+    private boolean matchesRegionValue(String normalizedRegion, String... candidates) {
+        if (normalizedRegion == null) {
+            return true;
+        }
+
+        for (String candidate : candidates) {
+            if (candidate != null && normalizedRegion.equalsIgnoreCase(candidate.trim())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private boolean isTripWithinRange(Trip trip, LocalDateTime startDate, LocalDateTime endDate) {
         if (startDate == null && endDate == null) {
             return true;
@@ -502,6 +653,35 @@ public class OperationalAnalyticsService {
             trip.getFuelUsed(),
             trip.getCompletionProcessedAt()
         );
+    }
+
+    private List<AnalyticsTimelinePointDTO> buildTripVolumeTrend(List<Trip> trips, LocalDateTime generatedAt) {
+        if (trips.isEmpty()) {
+            return List.of();
+        }
+
+        Map<LocalDate, List<Trip>> tripsByDay = trips.stream()
+            .filter(trip -> referenceTime(trip) != null)
+            .collect(Collectors.groupingBy(
+                trip -> referenceTime(trip).toLocalDate(),
+                LinkedHashMap::new,
+                Collectors.toList()
+            ));
+
+        return tripsByDay.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(entry -> {
+                List<Trip> dailyTrips = entry.getValue();
+                int completedTrips = (int) dailyTrips.stream().filter(trip -> trip.getStatus() == TripStatus.COMPLETED).count();
+                int delayedTrips = (int) dailyTrips.stream().filter(trip -> isDelayed(trip, generatedAt)).count();
+                return new AnalyticsTimelinePointDTO(
+                    entry.getKey().format(SHORT_DAY_FORMAT),
+                    dailyTrips.size(),
+                    completedTrips,
+                    delayedTrips
+                );
+            })
+            .toList();
     }
 
     private List<AnalyticsTrendDTO> buildDelayBuckets(List<Trip> delayedTrips) {

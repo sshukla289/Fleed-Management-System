@@ -16,6 +16,7 @@ public record TripAnalyticsDTO(
     int completedTrips,
     int cancelledTrips,
     int delayedTrips,
+    List<AnalyticsTimelinePointDTO> tripVolumeTrend,
     List<AnalyticsTrendDTO> delayTrends,
     List<AnalyticsTrendDTO> alertFrequencyByCategory,
     List<TripAnalyticsRowDTO> recentTrips

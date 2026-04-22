@@ -1,5 +1,7 @@
 package com.fleet.modules.route.service;
 
+import com.fleet.modules.audit.service.AuditLogService;
+import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.route.dto.CreateRoutePlanRequest;
 import com.fleet.modules.route.dto.RoutePlanDTO;
 import com.fleet.modules.route.dto.UpdateRoutePlanRequest;
@@ -9,20 +11,30 @@ import com.fleet.modules.trip.dto.TripStopDTO;
 import com.fleet.modules.trip.entity.StopStatus;
 import com.fleet.modules.trip.entity.TripStop;
 import java.util.ArrayList;
-
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class RoutePlanService {
 
     private final RoutePlanRepository routePlanRepository;
+    private final AuditLogService auditLogService;
+    private final CurrentUserService currentUserService;
 
-    public RoutePlanService(RoutePlanRepository routePlanRepository) {
+    public RoutePlanService(
+        RoutePlanRepository routePlanRepository,
+        AuditLogService auditLogService,
+        CurrentUserService currentUserService
+    ) {
         this.routePlanRepository = routePlanRepository;
+        this.auditLogService = auditLogService;
+        this.currentUserService = currentUserService;
     }
 
     public List<RoutePlanDTO> getRoutes() {
@@ -31,6 +43,7 @@ public class RoutePlanService {
             .toList();
     }
 
+    @Transactional
     public RoutePlanDTO createRoute(CreateRoutePlanRequest request) {
         validateRouteRequest(
             request.name(),
@@ -50,15 +63,39 @@ public class RoutePlanService {
 
         );
 
-        return toDto(routePlanRepository.save(routePlan));
+        RoutePlan saved = routePlanRepository.save(routePlan);
+        auditLogService.record(
+            currentUserService.getCurrentActor(),
+            "ROUTE_CREATED",
+            "ROUTE_PLAN",
+            saved.getId(),
+            "Route created.",
+            details("after", snapshot(saved))
+        );
+
+        return toDto(saved);
     }
 
+    @Transactional
     public List<RoutePlanDTO> optimizeRoutes() {
         List<RoutePlan> optimizedRoutes = routePlanRepository.findAll().stream()
             .map(this::applyOptimization)
             .toList();
 
         routePlanRepository.saveAll(optimizedRoutes);
+        if (!optimizedRoutes.isEmpty()) {
+            auditLogService.record(
+                currentUserService.getCurrentActor(),
+                "ROUTE_OPTIMIZATION_RUN",
+                "ROUTE_PLAN",
+                "BULK",
+                "Route optimization executed.",
+                details(
+                    "routeCount", optimizedRoutes.size(),
+                    "routeIds", optimizedRoutes.stream().map(RoutePlan::getId).toList()
+                )
+            );
+        }
 
         return optimizedRoutes.stream()
             .map(this::toDto)
@@ -70,6 +107,7 @@ public class RoutePlanService {
             .toList();
     }
 
+    @Transactional
     public RoutePlanDTO updateRoute(String id, UpdateRoutePlanRequest request) {
         validateRouteRequest(
             request.name(),
@@ -81,21 +119,42 @@ public class RoutePlanService {
 
         RoutePlan routePlan = routePlanRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Route not found."));
+        Map<String, Object> before = snapshot(routePlan);
 
         routePlan.setName(request.name().trim());
         routePlan.setStatus(request.status().trim());
         routePlan.setDistanceKm(request.distanceKm());
         routePlan.setEstimatedDuration(request.estimatedDuration().trim());
         routePlan.setStops(normalizeStops(mapDtoStops(request.stops())));
-        return toDto(routePlanRepository.save(routePlan));
+        RoutePlan saved = routePlanRepository.save(routePlan);
+        auditLogService.record(
+            currentUserService.getCurrentActor(),
+            "ROUTE_UPDATED",
+            "ROUTE_PLAN",
+            saved.getId(),
+            "Route updated.",
+            details(
+                "before", before,
+                "after", snapshot(saved)
+            )
+        );
+
+        return toDto(saved);
     }
 
+    @Transactional
     public void deleteRoute(String id) {
-        if (!routePlanRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Route not found.");
-        }
-
-        routePlanRepository.deleteById(id);
+        RoutePlan routePlan = routePlanRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Route not found."));
+        routePlanRepository.delete(routePlan);
+        auditLogService.record(
+            currentUserService.getCurrentActor(),
+            "ROUTE_DELETED",
+            "ROUTE_PLAN",
+            routePlan.getId(),
+            "Route deleted.",
+            details("before", snapshot(routePlan))
+        );
     }
 
     private int statusPriority(String status) {
@@ -313,6 +372,39 @@ public class RoutePlanService {
         return stops.stream()
             .filter(stop -> stop != null && stop.getName() != null && !stop.getName().trim().isEmpty())
             .toList();
+    }
+
+    private Map<String, Object> snapshot(RoutePlan routePlan) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("name", routePlan.getName());
+        values.put("status", routePlan.getStatus());
+        values.put("distanceKm", routePlan.getDistanceKm());
+        values.put("estimatedDuration", routePlan.getEstimatedDuration());
+        values.put("stopCount", routePlan.getStops() == null ? 0 : routePlan.getStops().size());
+        values.put(
+            "stops",
+            routePlan.getStops() == null
+                ? List.of()
+                : routePlan.getStops().stream().map(stop -> stop.getSequence() + ":" + stop.getName()).toList()
+        );
+        return values;
+    }
+
+    private Map<String, Object> details(Object... items) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        if (items == null) {
+            return values;
+        }
+
+        for (int index = 0; index < items.length; index += 2) {
+            Object key = items[index];
+            Object value = index + 1 < items.length ? items[index + 1] : null;
+            if (key != null && value != null) {
+                values.put(String.valueOf(key), value);
+            }
+        }
+
+        return values;
     }
 
 

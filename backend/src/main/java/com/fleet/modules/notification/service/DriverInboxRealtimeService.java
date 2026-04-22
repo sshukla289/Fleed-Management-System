@@ -54,6 +54,11 @@ public class DriverInboxRealtimeService {
             return;
         }
 
+        if (notification.recipientUserId() != null && !notification.recipientUserId().isBlank()) {
+            messagingTemplate.convertAndSend("/topic/user/" + notification.recipientUserId() + "/notifications", notification);
+            return;
+        }
+
         messagingTemplate.convertAndSend(OPERATIONS_NOTIFICATIONS_TOPIC, notification);
         resolveDriverIds(notification.tripId(), notification.vehicleId())
             .forEach(driverId -> messagingTemplate.convertAndSend("/topic/driver/" + driverId + "/notifications", notification));

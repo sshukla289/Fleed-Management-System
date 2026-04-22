@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
@@ -14,8 +14,8 @@ import {
   fetchVehicleTelemetry,
   fetchVehicles,
 } from '../services/apiService'
-import { useAppDispatch } from '../store/hooks'
-import { setDashboardSnapshot } from '../store/adminDashboardSlice'
+import { resetSelectedVehicleId, setDashboardSnapshot, setSelectedVehicleId } from '../store/adminDashboardSlice'
+import { useAppDispatch, useAppSelector } from '../store/hooks'
 import type {
   AdminDashboardActivity,
   AdminDashboardLiveVehicle,
@@ -615,7 +615,11 @@ export function AdminDashboard() {
   const { session } = useAuth()
   const navigate = useNavigate()
   const dispatch = useAppDispatch()
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
+  const selectedVehicleId = useAppSelector((state) => state.adminDashboard.selectedVehicleId)
+
+  useEffect(() => {
+    dispatch(resetSelectedVehicleId())
+  }, [dispatch])
 
   const coreQuery = useQuery({
     queryKey: ['admin-dashboard', 'core'],
@@ -880,7 +884,7 @@ export function AdminDashboard() {
             </div>
             <LiveFleetMap
               isLoading={isTelemetryLoading}
-              onSelectVehicle={setSelectedVehicleId}
+              onSelectVehicle={(vehicleId) => dispatch(setSelectedVehicleId(vehicleId))}
               selectedVehicleId={resolvedSelectedVehicleId}
               vehicles={liveVehicles}
             />
@@ -963,7 +967,7 @@ export function AdminDashboard() {
                 description="Open trip planning and dispatch handoff."
                 icon={<TripGlyph />}
                 title="Create Trip"
-                onClick={() => navigate('/trips')}
+                onClick={() => navigate('/admin/trip-governance')}
               />
               <ActionCard
                 accent="#0ea5e9"
@@ -977,14 +981,14 @@ export function AdminDashboard() {
                 description="Register a new driver and assign a shift."
                 icon={<DriverGlyph />}
                 title="Add Driver"
-                onClick={() => navigate('/drivers')}
+                onClick={() => navigate('/admin/fleet-master-data?tab=drivers')}
               />
               <ActionCard
                 accent="#f59e0b"
                 description="Add a fleet unit or update vehicle status."
                 icon={<VehicleGlyph />}
                 title="Add Vehicle"
-                onClick={() => navigate('/vehicles')}
+                onClick={() => navigate('/admin/fleet-master-data?tab=vehicles')}
               />
             </div>
           </article>

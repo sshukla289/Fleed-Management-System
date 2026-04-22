@@ -3,8 +3,10 @@ package com.fleet.modules.trip.service;
 import com.fleet.modules.route.entity.RoutePlan;
 import com.fleet.modules.route.repository.RoutePlanRepository;
 import com.fleet.modules.trip.dto.TripOptimizationResultDTO;
+import com.fleet.modules.trip.dto.TripStopDTO;
 import com.fleet.modules.trip.entity.Trip;
 import com.fleet.modules.trip.entity.TripOptimizationStatus;
+import com.fleet.modules.trip.entity.StopStatus;
 import com.fleet.modules.trip.entity.TripStop;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -59,7 +61,7 @@ public class TripOptimizationService {
         return new TripOptimizationResultDTO(
             trip.getId(),
             TripOptimizationStatus.OPTIMIZED,
-            mapToNames(optimizedStops),
+            mapToStops(optimizedStops),
             estimatedDistance,
             estimatedDuration,
             routeScore,
@@ -67,8 +69,18 @@ public class TripOptimizationService {
         );
     }
 
-    private List<String> mapToNames(List<TripStop> stops) {
-        return stops.stream().map(TripStop::getName).toList();
+    private List<TripStopDTO> mapToStops(List<TripStop> stops) {
+        return stops.stream()
+            .map(stop -> new TripStopDTO(
+                stop.getName(),
+                stop.getSequence(),
+                stop.getLatitude(),
+                stop.getLongitude(),
+                stop.getStatus() == null ? StopStatus.PENDING : stop.getStatus(),
+                stop.getArrivalTime(),
+                stop.getDepartureTime()
+            ))
+            .toList();
     }
 
     private List<TripStop> resolveStops(Trip trip) {

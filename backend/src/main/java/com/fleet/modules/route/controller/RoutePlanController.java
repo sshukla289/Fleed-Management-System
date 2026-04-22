@@ -27,31 +27,31 @@ public class RoutePlanController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER','DRIVER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','PLANNER','MAINTENANCE_MANAGER','DRIVER')")
     public ResponseEntity<List<RoutePlanDTO>> getRoutes() {
         return ResponseEntity.ok(routePlanService.getRoutes());
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','PLANNER')")
     public ResponseEntity<RoutePlanDTO> createRoute(@RequestBody CreateRoutePlanRequest request) {
         return ResponseEntity.ok(routePlanService.createRoute(request));
     }
 
     @PostMapping("/optimize")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','PLANNER')")
     public ResponseEntity<List<RoutePlanDTO>> optimizeRoutes() {
         return ResponseEntity.ok(routePlanService.optimizeRoutes());
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','PLANNER')")
     public ResponseEntity<RoutePlanDTO> updateRoute(@PathVariable String id, @RequestBody UpdateRoutePlanRequest request) {
         return ResponseEntity.ok(routePlanService.updateRoute(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','PLANNER')")
     public ResponseEntity<Void> deleteRoute(@PathVariable String id) {
         routePlanService.deleteRoute(id);
         return ResponseEntity.noContent().build();

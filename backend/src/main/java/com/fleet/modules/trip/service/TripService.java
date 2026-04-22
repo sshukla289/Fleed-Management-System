@@ -256,9 +256,12 @@ public class TripService {
     }
 
     @Transactional
-    public TripDTO dispatchTrip(String tripId) {
+    public TripDTO dispatchTrip(String tripId, boolean overrideValidation) {
         Trip trip = findTrip(tripId);
         enforceReadAccess(trip);
+        enforceDispatchOverrideAccess(overrideValidation);
+
+        boolean dispatchedWithOverride = false;
 
         if (trip.getStatus() == TripStatus.DRAFT || trip.getStatus() == TripStatus.BLOCKED) {
             TripValidationResultDTO validation = validationService.evaluate(trip);
@@ -272,9 +275,13 @@ public class TripService {
                     "Trip " + trip.getId() + " is blocked by validation checks.",
                     complianceMetadata(validation)
                 );
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip has blocking validation issues.");
+                if (!overrideValidation) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip has blocking validation issues.");
+                }
+                dispatchedWithOverride = true;
+            } else {
+                trip.setStatus(TripStatus.VALIDATED);
             }
-            trip.setStatus(TripStatus.VALIDATED);
         }
 
         if (trip.getOptimizationStatus() != TripOptimizationStatus.OPTIMIZED) {
@@ -288,23 +295,29 @@ public class TripService {
             trip.setStatus(TripStatus.OPTIMIZED);
         }
 
-        Trip dispatched = dispatchService.dispatch(trip);
+        Trip dispatched = dispatchService.dispatch(trip, overrideValidation);
         tripRepository.save(dispatched);
         tripTrackingBroadcastService.publishTripState(dispatched, "TRIP_DISPATCHED");
         auditLogService.record(
             currentUserService.getCurrentActor(),
-            "TRIP_DISPATCHED",
+            dispatchedWithOverride ? "TRIP_DISPATCHED_WITH_OVERRIDE" : "TRIP_DISPATCHED",
             "TRIP",
             dispatched.getId(),
-            "Trip dispatched.",
+            dispatchedWithOverride ? "Trip dispatched with validation override." : "Trip dispatched.",
             details(
                 "vehicleId", dispatched.getAssignedVehicleId(),
                 "driverId", dispatched.getAssignedDriverId(),
                 "dispatchStatus", dispatched.getDispatchStatus().name(),
-                "complianceStatus", dispatched.getComplianceStatus().name()
+                "complianceStatus", dispatched.getComplianceStatus().name(),
+                "overrideValidation", overrideValidation
             )
         );
         return toDto(dispatched);
+    }
+
+    @Transactional
+    public TripDTO dispatchTrip(String tripId) {
+        return dispatchTrip(tripId, false);
     }
 
     @Transactional
@@ -602,6 +615,16 @@ public class TripService {
 
         if (trip.getAssignedDriverId() == null || !trip.getAssignedDriverId().equalsIgnoreCase(currentUserService.getRequiredUser().getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Drivers can only " + action + " their own trips.");
+        }
+    }
+
+    private void enforceDispatchOverrideAccess(boolean overrideValidation) {
+        if (!overrideValidation) {
+            return;
+        }
+
+        if (currentUserService.getCurrentRole() != AppRole.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admins can override validation during dispatch.");
         }
     }
 

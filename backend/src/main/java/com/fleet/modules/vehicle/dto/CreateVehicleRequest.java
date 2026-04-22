@@ -5,6 +5,7 @@ public record CreateVehicleRequest(
     String type,
     String status,
     String location,
+    String assignedRegion,
     int fuelLevel,
     int mileage,
     String driverId

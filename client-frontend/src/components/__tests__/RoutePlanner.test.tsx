@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { RoutePlanner } from '../../pages/RoutePlanner'
 
@@ -21,7 +22,13 @@ jest.mock('../../components/RoutePreviewMap', () => ({
 }))
 
 describe('RoutePlanner', () => {
+  let queryClient: QueryClient
+
   beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
     fetchRoutePlansMock.mockResolvedValue([
       {
         id: 'RT-501',
@@ -65,12 +72,14 @@ describe('RoutePlanner', () => {
     const confirmSpy = jest.spyOn(window, 'confirm').mockImplementation(() => true)
 
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-        initialEntries={['/routes']}
-      >
-        <RoutePlanner />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter
+          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          initialEntries={['/routes']}
+        >
+          <RoutePlanner />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     const routeHeading = await screen.findByRole('heading', { name: /southern last-mile sweep/i })
@@ -95,12 +104,14 @@ describe('RoutePlanner', () => {
 
   it('keeps a leading zero for single digits and removes it at ten', async () => {
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-        initialEntries={['/routes']}
-      >
-        <RoutePlanner />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter
+          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          initialEntries={['/routes']}
+        >
+          <RoutePlanner />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /add route/i }))
@@ -118,12 +129,14 @@ describe('RoutePlanner', () => {
 
   it('limits the distance input to two decimal places', async () => {
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-        initialEntries={['/routes']}
-      >
-        <RoutePlanner />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter
+          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          initialEntries={['/routes']}
+        >
+          <RoutePlanner />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /add route/i }))
@@ -148,12 +161,14 @@ describe('RoutePlanner', () => {
     })
 
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-        initialEntries={['/routes']}
-      >
-        <RoutePlanner />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter
+          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          initialEntries={['/routes']}
+        >
+          <RoutePlanner />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /add route/i }))
@@ -217,12 +232,14 @@ describe('RoutePlanner', () => {
     ])
 
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-        initialEntries={['/routes']}
-      >
-        <RoutePlanner />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter
+          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          initialEntries={['/routes']}
+        >
+          <RoutePlanner />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /optimize route/i }))

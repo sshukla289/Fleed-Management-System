@@ -15,6 +15,7 @@ import com.fleet.modules.driver.entity.Driver;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.notification.service.DriverInboxRealtimeService;
 import com.fleet.modules.notification.service.NotificationService;
+import com.fleet.modules.system.service.SystemConfigService;
 import com.fleet.modules.telemetry.entity.Telemetry;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.trip.repository.TripRepository;
@@ -51,6 +52,7 @@ public class AlertService {
     private final TripRepository tripRepository;
     private final DriverRepository driverRepository;
     private final DriverInboxRealtimeService driverInboxRealtimeService;
+    private final SystemConfigService systemConfigService;
 
     public AlertService(
         AlertRepository alertRepository,
@@ -59,7 +61,8 @@ public class AlertService {
         CurrentUserService currentUserService,
         TripRepository tripRepository,
         DriverRepository driverRepository,
-        DriverInboxRealtimeService driverInboxRealtimeService
+        DriverInboxRealtimeService driverInboxRealtimeService,
+        SystemConfigService systemConfigService
     ) {
         this.alertRepository = alertRepository;
         this.notificationService = notificationService;
@@ -68,6 +71,7 @@ public class AlertService {
         this.tripRepository = tripRepository;
         this.driverRepository = driverRepository;
         this.driverInboxRealtimeService = driverInboxRealtimeService;
+        this.systemConfigService = systemConfigService;
     }
 
     public List<AlertDTO> getAlerts() {
@@ -189,7 +193,9 @@ public class AlertService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Telemetry is required.");
         }
 
-        if (telemetry.getSpeed() > 80) {
+        SystemConfigService.TrackingSettings trackingSettings = systemConfigService.getTrackingSettings();
+
+        if (telemetry.getSpeed() > trackingSettings.speedLimitKph()) {
             return upsertAlert(
                 AlertCategory.SAFETY,
                 AlertSeverity.CRITICAL,
@@ -199,11 +205,11 @@ public class AlertService {
                 telemetry.getVehicleId(),
                 telemetry.getTripId(),
                 telemetry.getVehicleId(),
-                "{\"speed\":" + telemetry.getSpeed() + "}"
+                "{\"speed\":" + telemetry.getSpeed() + ",\"speedLimitKph\":" + trackingSettings.speedLimitKph() + "}"
             );
         }
 
-        if (telemetry.getFuelLevel() < 10) {
+        if (telemetry.getFuelLevel() < trackingSettings.lowFuelAlertThresholdPercent()) {
             return upsertAlert(
                 AlertCategory.LOW_FUEL,
                 AlertSeverity.MEDIUM,
@@ -213,7 +219,7 @@ public class AlertService {
                 telemetry.getVehicleId(),
                 telemetry.getTripId(),
                 telemetry.getVehicleId(),
-                "{\"fuelLevel\":" + telemetry.getFuelLevel() + "}"
+                "{\"fuelLevel\":" + telemetry.getFuelLevel() + ",\"thresholdPercent\":" + trackingSettings.lowFuelAlertThresholdPercent() + "}"
             );
         }
 

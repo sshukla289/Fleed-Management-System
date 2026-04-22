@@ -27,25 +27,25 @@ public class MaintenanceController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','DISPATCHER_PLANNER','MAINTENANCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','PLANNER','MAINTENANCE_MANAGER')")
     public ResponseEntity<List<MaintenanceAlertDTO>> getAlerts() {
         return ResponseEntity.ok(maintenanceService.getAlerts());
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','MAINTENANCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','MAINTENANCE_MANAGER')")
     public ResponseEntity<MaintenanceAlertDTO> createAlert(@RequestBody CreateMaintenanceAlertRequest request) {
         return ResponseEntity.ok(maintenanceService.createAlert(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','MAINTENANCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','MAINTENANCE_MANAGER')")
     public ResponseEntity<MaintenanceAlertDTO> updateAlert(@PathVariable String id, @RequestBody UpdateMaintenanceAlertRequest request) {
         return ResponseEntity.ok(maintenanceService.updateAlert(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','FLEET_MANAGER','MAINTENANCE_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','MAINTENANCE_MANAGER')")
     public ResponseEntity<Void> deleteAlert(@PathVariable String id) {
         maintenanceService.deleteAlert(id);
         return ResponseEntity.noContent().build();

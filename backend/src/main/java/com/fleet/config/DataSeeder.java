@@ -62,19 +62,19 @@ public class DataSeeder {
         return args -> {
             if (vehicleRepository.count() == 0) {
                 vehicleRepository.saveAll(List.of(
-                    new Vehicle("VH-101", "Atlas Prime", "Heavy Truck", VehicleOperationalStatus.ACTIVE.value(), "Mumbai Hub", 72, 128540, "DR-201"),
-                    new Vehicle("VH-102", "Coastal Runner", "Reefer Van", VehicleOperationalStatus.IDLE.value(), "Pune Depot", 54, 87920, "DR-202"),
-                    new Vehicle("VH-103", "Northline Carrier", "Flatbed", VehicleOperationalStatus.MAINTENANCE.value(), "Nagpur Service Bay", 31, 165210, "DR-203"),
-                    new Vehicle("VH-104", "Urban Sprint", "Light Commercial", VehicleOperationalStatus.ACTIVE.value(), "Bengaluru Last-Mile Center", 81, 43180, "DR-204")
+                    new Vehicle("VH-101", "Atlas Prime", "Heavy Truck", VehicleOperationalStatus.ACTIVE.value(), "Mumbai Hub", "West India", 72, 128540, "DR-201"),
+                    new Vehicle("VH-102", "Coastal Runner", "Reefer Van", VehicleOperationalStatus.IDLE.value(), "Pune Depot", "West India", 54, 87920, "DR-202"),
+                    new Vehicle("VH-103", "Northline Carrier", "Flatbed", VehicleOperationalStatus.MAINTENANCE.value(), "Nagpur Service Bay", "Central India", 31, 165210, "DR-203"),
+                    new Vehicle("VH-104", "Urban Sprint", "Light Commercial", VehicleOperationalStatus.ACTIVE.value(), "Bengaluru Last-Mile Center", "South India", 81, 43180, "DR-204")
                 ));
             }
 
             if (driverRepository.count() == 0) {
                 driverRepository.saveAll(List.of(
-                    new Driver("DR-201", "Aarav Sharma", DriverDutyStatus.ON_DUTY.value(), "HMV", "+91 98765 43210", "VH-101", 5.2),
-                    new Driver("DR-202", "Nisha Patel", DriverDutyStatus.RESTING.value(), "LMV", "+91 98765 43211", "VH-102", 3.4),
-                    new Driver("DR-203", "Rohan Verma", DriverDutyStatus.OFF_DUTY.value(), "HMV", "+91 98765 43212", "VH-103", 0),
-                    new Driver("DR-204", "Ishita Mehra", DriverDutyStatus.ON_DUTY.value(), "Transport", "+91 98765 43213", "VH-104", 6.1)
+                    new Driver("DR-201", "Aarav Sharma", DriverDutyStatus.ON_DUTY.value(), "HMV", "MH-14-DR-9087", "2027-08-30", "Morning", "+91 98765 43210", "VH-101", 5.2),
+                    new Driver("DR-202", "Nisha Patel", DriverDutyStatus.RESTING.value(), "LMV", "MH-12-DR-5521", "2028-01-14", "Evening", "+91 98765 43211", "VH-102", 3.4),
+                    new Driver("DR-203", "Rohan Verma", DriverDutyStatus.OFF_DUTY.value(), "HMV", "MH-31-DR-7744", "2026-11-02", "Night", "+91 98765 43212", "VH-103", 0),
+                    new Driver("DR-204", "Ishita Mehra", DriverDutyStatus.ON_DUTY.value(), "Transport", "KA-03-DR-4412", "2027-05-19", "Morning", "+91 98765 43213", "VH-104", 6.1)
                 ));
             }
 

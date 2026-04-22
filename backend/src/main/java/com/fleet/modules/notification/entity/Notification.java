@@ -30,6 +30,9 @@ public class Notification {
     private String entityId;
     private String tripId;
     private String vehicleId;
+    private String recipientUserId;
+    private String targetRole;
+    private String broadcastId;
 
     @Column(length = 2000)
     private String metadataJson;
@@ -107,6 +110,30 @@ public class Notification {
 
     public void setVehicleId(String vehicleId) {
         this.vehicleId = vehicleId;
+    }
+
+    public String getRecipientUserId() {
+        return recipientUserId;
+    }
+
+    public void setRecipientUserId(String recipientUserId) {
+        this.recipientUserId = recipientUserId;
+    }
+
+    public String getTargetRole() {
+        return targetRole;
+    }
+
+    public void setTargetRole(String targetRole) {
+        this.targetRole = targetRole;
+    }
+
+    public String getBroadcastId() {
+        return broadcastId;
+    }
+
+    public void setBroadcastId(String broadcastId) {
+        this.broadcastId = broadcastId;
     }
 
     public String getMetadataJson() {

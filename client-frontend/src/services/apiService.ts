@@ -36,10 +36,13 @@ import type {
   LoginCredentials,
   MaintenanceAlert,
   MaintenanceSchedule,
+  MaintenanceScheduleStatus,
   Notification,
+  NotificationBroadcast,
   ProofOfDelivery,
   RoutePlan,
   SosAlert,
+  SystemConfigEntry,
   SyncBatchResponse,
   SyncOperationType,
   Trip,
@@ -56,6 +59,7 @@ import type {
   UpdateDriverProfileInput,
   UpdateMaintenanceAlertInput,
   UpdateProfileInput,
+  UpdateSystemConfigInput,
   UpdateRoutePlanInput,
   UpdateTripInput,
   UpdateTripChecklistInput,
@@ -64,6 +68,7 @@ import type {
   UserProfile,
   Vehicle,
   VehicleAnalytics,
+  CreateNotificationBroadcastInput,
 } from '../types'
 import type { StopStatus } from '../types'
 
@@ -71,6 +76,7 @@ type AnalyticsFilters = {
   startDate?: string
   endDate?: string
   status?: TripStatus
+  region?: string
 }
 
 type AuditFilters = {
@@ -219,6 +225,9 @@ function buildAnalyticsQuery(filters: AnalyticsFilters) {
   }
   if (filters.status) {
     params.set('status', filters.status)
+  }
+  if (filters.region?.trim()) {
+    params.set('region', filters.region.trim())
   }
 
   const query = params.toString()
@@ -611,6 +620,28 @@ export function markNotificationRead(id: string): Promise<Notification> {
   return request<Notification>(`/notifications/${id}/read`, { method: 'POST' })
 }
 
+export function fetchNotificationBroadcasts(): Promise<NotificationBroadcast[]> {
+  return request<NotificationBroadcast[]>('/admin/notifications/broadcasts')
+}
+
+export function sendNotificationBroadcast(input: CreateNotificationBroadcastInput): Promise<NotificationBroadcast> {
+  return request<NotificationBroadcast>('/admin/notifications/broadcasts', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function fetchSystemConfigEntries(): Promise<SystemConfigEntry[]> {
+  return request<SystemConfigEntry[]>('/admin/system-config')
+}
+
+export function updateSystemConfigEntries(input: UpdateSystemConfigInput): Promise<SystemConfigEntry[]> {
+  return request<SystemConfigEntry[]>('/admin/system-config', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
 export function fetchAuditLogs(filters: AuditFilters = {}): Promise<AuditLogEntry[]> {
   return request<AuditLogEntry[]>(`/audit-logs${buildAuditQuery(filters)}`)
 }
@@ -626,6 +657,16 @@ export function fetchMaintenanceSchedules(): Promise<MaintenanceSchedule[]> {
 export function createMaintenanceSchedule(input: CreateMaintenanceScheduleInput): Promise<MaintenanceSchedule> {
   return request<MaintenanceSchedule>('/maintenance/schedules', {
     method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function updateMaintenanceScheduleStatus(
+  id: string,
+  input: { status: MaintenanceScheduleStatus; notes?: string },
+): Promise<MaintenanceSchedule> {
+  return request<MaintenanceSchedule>(`/maintenance/schedules/${id}/status`, {
+    method: 'PUT',
     body: JSON.stringify(input),
   })
 }
@@ -650,6 +691,7 @@ export function fetchVehicleAnalytics(filters: AnalyticsFilters): Promise<Vehicl
   return request<VehicleAnalytics>(`/analytics/vehicles${buildAnalyticsQuery({
     startDate: filters.startDate,
     endDate: filters.endDate,
+    region: filters.region,
   })}`)
 }
 
@@ -657,6 +699,7 @@ export function fetchDriverAnalytics(filters: AnalyticsFilters): Promise<DriverA
   return request<DriverAnalytics>(`/analytics/drivers${buildAnalyticsQuery({
     startDate: filters.startDate,
     endDate: filters.endDate,
+    region: filters.region,
   })}`)
 }
 

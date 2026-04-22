@@ -9,7 +9,11 @@ import type { AppRole } from './types'
 import './App.css'
 
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then((module) => ({ default: module.AdminDashboard })))
+const AdminAnalytics = lazy(() => import('./pages/AdminAnalytics').then((module) => ({ default: module.AdminAnalytics })))
+const AdminSystemControlPage = lazy(() => import('./pages/AdminSystemControl').then((module) => ({ default: module.AdminSystemControlPage })))
+const AdminTripGovernancePage = lazy(() => import('./pages/AdminTripGovernance').then((module) => ({ default: module.AdminTripGovernancePage })))
 const AdminUsersPage = lazy(() => import('./pages/AdminUsers').then((module) => ({ default: module.AdminUsersPage })))
+const FleetMasterDataPage = lazy(() => import('./pages/FleetMasterData').then((module) => ({ default: module.FleetMasterDataPage })))
 const AnalyticsReports = lazy(() => import('./pages/AnalyticsReports').then((module) => ({ default: module.AnalyticsReports })))
 const AuditLogs = lazy(() => import('./pages/AuditLogs').then((module) => ({ default: module.AuditLogs })))
 const AlertsCenter = lazy(() => import('./pages/AlertsCenter').then((module) => ({ default: module.AlertsCenter })))
@@ -89,7 +93,7 @@ function defaultPathForRole(role: string | undefined): string {
   }
 
   if (hasAnyRole(role, ['MAINTENANCE_MANAGER'])) {
-    return '/maintenance/dashboard'
+    return '/maintenance'
   }
 
   if (hasAnyRole(role, ['OPERATIONS_MANAGER'])) {
@@ -140,8 +144,17 @@ function App() {
         <Route path="/admin/users" element={<RoleRoute allowedRoles={['ADMIN']} />}>
           <Route index element={<RouteLoader><AdminUsersPage /></RouteLoader>} />
         </Route>
-        <Route path="/maintenance/dashboard" element={<RoleRoute allowedRoles={['MAINTENANCE_MANAGER']} />}>
-          <Route index element={<RouteLoader><MaintenanceDashboard /></RouteLoader>} />
+        <Route path="/admin/analytics" element={<RoleRoute allowedRoles={['ADMIN']} />}>
+          <Route index element={<RouteLoader><AdminAnalytics /></RouteLoader>} />
+        </Route>
+        <Route path="/admin/system-control" element={<RoleRoute allowedRoles={['ADMIN']} />}>
+          <Route index element={<RouteLoader><AdminSystemControlPage /></RouteLoader>} />
+        </Route>
+        <Route path="/admin/trip-governance" element={<RoleRoute allowedRoles={['ADMIN']} />}>
+          <Route index element={<RouteLoader><AdminTripGovernancePage /></RouteLoader>} />
+        </Route>
+        <Route path="/admin/fleet-master-data" element={<RoleRoute allowedRoles={['ADMIN']} />}>
+          <Route index element={<RouteLoader><FleetMasterDataPage /></RouteLoader>} />
         </Route>
         <Route path="/driver/dashboard" element={<RoleRoute allowedRoles={['DRIVER']} />}>
           <Route index element={<Navigate to="/driver/trip-execution" replace />} />
@@ -165,7 +178,7 @@ function App() {
         <Route element={<RoleRoute allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DISPATCHER', 'PLANNER', 'MAINTENANCE_MANAGER', 'DRIVER']} />}>
           <Route path="/dashboard" element={<Navigate to={defaultPath} replace />} />
         </Route>
-        <Route element={<RoleRoute allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DISPATCHER', 'PLANNER', 'MAINTENANCE_MANAGER']} />}>
+        <Route element={<RoleRoute allowedRoles={['OPERATIONS_MANAGER', 'DISPATCHER', 'PLANNER', 'MAINTENANCE_MANAGER']} />}>
           <Route path="/analytics/reports" element={<RouteLoader><AnalyticsReports /></RouteLoader>} />
         </Route>
         <Route element={<RoleRoute allowedRoles={['ADMIN', 'OPERATIONS_MANAGER']} />}>
@@ -188,7 +201,9 @@ function App() {
           <Route path="/routes" element={<RouteLoader><RoutePlanner /></RouteLoader>} />
         </Route>
         <Route element={<RoleRoute allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'MAINTENANCE_MANAGER']} />}>
-          <Route path="/maintenance" element={<RouteLoader><MaintenanceAlerts /></RouteLoader>} />
+          <Route path="/maintenance" element={<RouteLoader><MaintenanceDashboard /></RouteLoader>} />
+          <Route path="/maintenance/dashboard" element={<Navigate to="/maintenance" replace />} />
+          <Route path="/maintenance/alerts" element={<RouteLoader><MaintenanceAlerts /></RouteLoader>} />
         </Route>
       </Route>
     </Routes>

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { MaintenanceAlerts } from '../../pages/MaintenanceAlerts'
 
@@ -32,7 +33,13 @@ jest.mock('../../context/useAuth', () => ({
 }))
 
 describe('MaintenanceAlerts', () => {
+  let queryClient: QueryClient
+
   beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
     fetchMaintenanceAlertsMock.mockResolvedValue([
       {
         id: 'MA-1',
@@ -90,12 +97,14 @@ describe('MaintenanceAlerts', () => {
     const confirmSpy = jest.spyOn(window, 'confirm').mockImplementation(() => true)
 
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-        initialEntries={['/maintenance']}
-      >
-        <MaintenanceAlerts />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter
+          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          initialEntries={['/maintenance']}
+        >
+          <MaintenanceAlerts />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     const alertHeading = await screen.findByRole('heading', { name: /oil pressure inspection/i })

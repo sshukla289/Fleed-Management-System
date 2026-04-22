@@ -9,12 +9,14 @@ interface AdminDashboardState {
   dashboardStats: DashboardAnalytics | null
   liveVehicles: AdminDashboardLiveVehicle[]
   recentActivities: AdminDashboardActivity[]
+  selectedVehicleId: string | null
 }
 
 const initialState: AdminDashboardState = {
   dashboardStats: null,
   liveVehicles: [],
   recentActivities: [],
+  selectedVehicleId: null,
 }
 
 const adminDashboardSlice = createSlice({
@@ -29,6 +31,12 @@ const adminDashboardSlice = createSlice({
     },
     setRecentActivities(state, action: PayloadAction<AdminDashboardActivity[]>) {
       state.recentActivities = action.payload
+    },
+    setSelectedVehicleId(state, action: PayloadAction<string | null>) {
+      state.selectedVehicleId = action.payload
+    },
+    resetSelectedVehicleId(state) {
+      state.selectedVehicleId = null
     },
     setDashboardSnapshot(
       state,
@@ -50,6 +58,8 @@ export const {
   setDashboardStats,
   setLiveVehicles,
   setRecentActivities,
+  setSelectedVehicleId,
+  resetSelectedVehicleId,
 } = adminDashboardSlice.actions
 
 export const adminDashboardReducer = adminDashboardSlice.reducer

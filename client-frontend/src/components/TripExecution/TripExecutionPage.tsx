@@ -183,6 +183,9 @@ export function TripExecutionPage() {
   const trackingTripId = activeTrip && activeTrip.status !== 'COMPLETED' ? activeTrip.id : undefined
   const activeTripId = activeTrip?.id ?? null
   const isDriver = session?.profile.role === 'DRIVER'
+  const driverDisplayName = isDriver
+    ? session?.profile.name?.trim() || null
+    : null
   const pauseReasonDraft = pauseReasonDraftState.tripId === activeTripId ? pauseReasonDraftState.value : ''
   const selectedChecklistType: ChecklistType = !activeTrip || activeTrip.status === 'DISPATCHED'
     ? 'PRE'
@@ -220,11 +223,22 @@ export function TripExecutionPage() {
     enabled: Boolean(activeTrip?.id),
   })
 
+  const withDriverDisplayName = useCallback((trip: ExecutionTrip | null) => {
+    if (!trip || !driverDisplayName) {
+      return trip
+    }
+
+    return {
+      ...trip,
+      driverName: driverDisplayName,
+    }
+  }, [driverDisplayName])
+
   useEffect(() => {
     if (activeTripQuery.data) {
-      dispatch(setTrip(activeTripQuery.data))
+      dispatch(setTrip(withDriverDisplayName(activeTripQuery.data)))
     }
-  }, [activeTripQuery.data, dispatch])
+  }, [activeTripQuery.data, dispatch, withDriverDisplayName])
 
   useEffect(() => {
     if (!activeTrip || podQuery.data === undefined) {
@@ -238,11 +252,11 @@ export function TripExecutionPage() {
       return
     }
 
-    dispatch(setTrip({
+    dispatch(setTrip(withDriverDisplayName({
       ...activeTrip,
       pod: podQuery.data ?? activeTrip.pod ?? null,
-    }))
-  }, [activeTrip, dispatch, podQuery.data])
+    })))
+  }, [activeTrip, dispatch, podQuery.data, withDriverDisplayName])
 
   useEffect(() => {
     if (!activeTrip) {
@@ -340,11 +354,11 @@ export function TripExecutionPage() {
   const updateMutationState = useCallback(
     (trip: ExecutionTrip | null, pendingAction: string | null) => {
       if (trip) {
-        dispatch(setTrip(trip))
+        dispatch(setTrip(withDriverDisplayName(trip)))
       }
       dispatch(setActionInProgress(pendingAction))
     },
-    [dispatch],
+    [dispatch, withDriverDisplayName],
   )
 
   const startMutation = useMutation({
@@ -407,10 +421,10 @@ export function TripExecutionPage() {
         return
       }
 
-      dispatch(setTrip({
+      dispatch(setTrip(withDriverDisplayName({
         ...activeTrip,
         pod,
-      }))
+      })))
     },
     onError: (error) => {
       setPodError(error instanceof Error ? error.message : 'Proof of delivery submission failed')
@@ -435,10 +449,10 @@ export function TripExecutionPage() {
         return
       }
 
-      dispatch(setTrip({
+      dispatch(setTrip(withDriverDisplayName({
         ...activeTrip,
         otp,
-      }))
+      })))
       if (otp.verified) {
         setOtpModalOpen(false)
       }
@@ -463,10 +477,10 @@ export function TripExecutionPage() {
         return
       }
 
-      dispatch(setTrip({
+      dispatch(setTrip(withDriverDisplayName({
         ...activeTrip,
         otp,
-      }))
+      })))
     },
     onError: (error) => {
       setOtpError(error instanceof Error ? error.message : 'OTP resend failed')

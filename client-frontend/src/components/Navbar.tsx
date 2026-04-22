@@ -12,6 +12,10 @@ const titles: Record<string, { title: string; subtitle: string }> = {
     title: 'System Control & Governance',
     subtitle: 'Manage systemic roles, user access models, and review security audit trails.',
   },
+  '/admin/system-control': {
+    title: 'Admin Notification Control',
+    subtitle: 'Broadcast dynamic role-based messages and tune live operational thresholds.',
+  },
   '/maintenance/dashboard': {
     title: 'Maintenance Cockpit',
     subtitle: 'Manage service orders, vehicle health, and workshop schedules.',

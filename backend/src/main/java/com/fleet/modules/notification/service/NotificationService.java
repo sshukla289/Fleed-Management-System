@@ -9,6 +9,7 @@ import com.fleet.modules.driver.entity.Driver;
 import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.issue.entity.Issue;
 import com.fleet.modules.maintenance.entity.MaintenanceSchedule;
+import com.fleet.modules.notification.entity.NotificationBroadcast;
 import com.fleet.modules.notification.dto.NotificationDTO;
 import com.fleet.modules.notification.entity.Notification;
 import com.fleet.modules.notification.entity.NotificationCategory;
@@ -18,8 +19,10 @@ import com.fleet.modules.trip.entity.Trip;
 import com.fleet.modules.trip.entity.TripStatus;
 import com.fleet.modules.trip.repository.TripRepository;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -125,11 +128,19 @@ public class NotificationService {
             return false;
         }
 
+        AppUser actor = currentUserService.getRequiredUser();
+        if (isTargetedToUser(actor.getId(), notification)) {
+            return true;
+        }
+
+        if (notification.getRecipientUserId() != null && !notification.getRecipientUserId().isBlank()) {
+            return false;
+        }
+
         if (currentUserService.getCurrentRole() != AppRole.DRIVER) {
             return true;
         }
 
-        AppUser actor = currentUserService.getRequiredUser();
         return isVisibleToDriver(actor.getId(), notification);
     }
 
@@ -138,8 +149,56 @@ public class NotificationService {
             return false;
         }
 
+        if (isTargetedToUser(driverId, notification)) {
+            return true;
+        }
+
+        if (notification.getRecipientUserId() != null && !notification.getRecipientUserId().isBlank()) {
+            return false;
+        }
+
         return matchesDriverTrip(driverId, notification.getTripId())
             || matchesDriverVehicle(driverId, notification.getVehicleId());
+    }
+
+    @Transactional
+    public void createBroadcastNotifications(
+        NotificationBroadcast broadcast,
+        List<AppUser> recipients,
+        String metadataJson
+    ) {
+        if (broadcast == null || recipients == null || recipients.isEmpty()) {
+            return;
+        }
+
+        List<Notification> notifications = new ArrayList<>();
+        LocalDateTime createdAt = LocalDateTime.now();
+        for (AppUser recipient : recipients) {
+            if (recipient == null || recipient.getId() == null || recipient.getId().isBlank()) {
+                continue;
+            }
+
+            Notification notification = new Notification();
+            notification.setId(nextId());
+            notification.setCategory(NotificationCategory.BROADCAST_MESSAGE);
+            notification.setSeverity(broadcast.getSeverity());
+            notification.setTitle(broadcast.getTitle());
+            notification.setMessage(broadcast.getMessage());
+            notification.setEntityType("SYSTEM_BROADCAST");
+            notification.setEntityId(broadcast.getId());
+            notification.setTripId(null);
+            notification.setVehicleId(null);
+            notification.setRecipientUserId(recipient.getId());
+            notification.setTargetRole(AppRole.fromStoredValue(recipient.getRole()).name());
+            notification.setBroadcastId(broadcast.getId());
+            notification.setMetadataJson(metadataJson);
+            notification.setCreatedAt(createdAt);
+            notification.setReadAt(null);
+            notifications.add(notification);
+        }
+
+        notificationRepository.saveAll(notifications)
+            .forEach(this::publishRealtime);
     }
 
     private boolean matchesDriverTrip(String driverId, String tripId) {
@@ -409,6 +468,9 @@ public class NotificationService {
         notification.setEntityId(entityId);
         notification.setTripId(tripId);
         notification.setVehicleId(vehicleId);
+        notification.setRecipientUserId(null);
+        notification.setTargetRole(null);
+        notification.setBroadcastId(null);
         notification.setMetadataJson(metadataJson);
         notification.setReadAt(null);
 
@@ -426,6 +488,7 @@ public class NotificationService {
             notification.getEntityId(),
             notification.getTripId(),
             notification.getVehicleId(),
+            notification.getRecipientUserId(),
             notification.getMetadataJson(),
             notification.getCreatedAt(),
             notification.getReadAt(),
@@ -440,24 +503,7 @@ public class NotificationService {
     }
 
     private String nextId() {
-        int nextNumber = notificationRepository.findAll().stream()
-            .map(Notification::getId)
-            .mapToInt(id -> parseNumericSuffix(id, "NT-"))
-            .max()
-            .orElse(0) + 1;
-        return "NT-" + nextNumber;
-    }
-
-    private int parseNumericSuffix(String id, String prefix) {
-        if (id == null || !id.startsWith(prefix)) {
-            return 0;
-        }
-
-        try {
-            return Integer.parseInt(id.substring(prefix.length()));
-        } catch (NumberFormatException exception) {
-            return 0;
-        }
+        return "NT-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
     }
 
     private String normalizeRequestedDriverId(String driverId) {
@@ -472,6 +518,15 @@ public class NotificationService {
         }
 
         return normalizedDriverId;
+    }
+
+    private boolean isTargetedToUser(String userId, Notification notification) {
+        return userId != null
+            && !userId.isBlank()
+            && notification != null
+            && notification.getRecipientUserId() != null
+            && !notification.getRecipientUserId().isBlank()
+            && userId.equalsIgnoreCase(notification.getRecipientUserId());
     }
 
     private String buildMetadata(Object... items) {

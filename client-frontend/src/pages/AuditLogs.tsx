@@ -1,38 +1,50 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { PageHeader } from '../components/PageHeader'
 import { fetchAuditLogs, fetchAuditLogsByEntity } from '../services/apiService'
 import type { AuditLogEntry } from '../types'
 
 const defaultFrom = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
 const defaultTo = new Date().toISOString().slice(0, 16)
+const tableGridStyle = { gridTemplateColumns: '1fr 1fr 1.35fr 1fr' } as const
 
 function formatDateTime(value: string) {
   const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString()
 }
 
+function formatEntity(item: AuditLogEntry) {
+  return item.entityId ? `${item.entityType} / ${item.entityId}` : item.entityType
+}
+
 export function AuditLogs() {
   const [items, setItems] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
-    const [from, setFrom] = useState(defaultFrom)
+  const [error, setError] = useState('')
+  const [from, setFrom] = useState(defaultFrom)
   const [to, setTo] = useState(defaultTo)
   const [entityType, setEntityType] = useState('')
   const [entityId, setEntityId] = useState('')
 
   const loadAuditLogs = useCallback(
     async (filters: { from: string; to: string; entityType: string; entityId: string }) => {
-    setLoading(true)
+      setLoading(true)
+      setError('')
 
-    try {
-      const data =
-        filters.entityType.trim() && filters.entityId.trim()
-          ? await fetchAuditLogsByEntity(filters.entityType.trim(), filters.entityId.trim())
-          : await fetchAuditLogs({ from: filters.from, to: filters.to })
-      setItems(data)
-    } catch (error: unknown) { console.error(error);  console.error(); } finally {
-      setLoading(false)
-      setWorking(false)
-    }
+      try {
+        const data =
+          filters.entityType.trim() && filters.entityId.trim()
+            ? await fetchAuditLogsByEntity(filters.entityType.trim(), filters.entityId.trim())
+            : await fetchAuditLogs({ from: filters.from, to: filters.to })
+        setItems(data)
+      } catch (caughtError) {
+        const message = caughtError instanceof Error ? caughtError.message : 'Unable to load audit logs.'
+        setItems([])
+        setError(message)
+      } finally {
+        setLoading(false)
+        setWorking(false)
+      }
     },
     [],
   )
@@ -55,15 +67,30 @@ export function AuditLogs() {
     await loadAuditLogs({ from, to, entityType, entityId })
   }
 
+  function handleRefresh() {
+    setWorking(true)
+    void loadAuditLogs({ from, to, entityType, entityId })
+  }
+
+  function handleReset() {
+    setFrom(defaultFrom)
+    setTo(defaultTo)
+    setEntityType('')
+    setEntityId('')
+    setWorking(true)
+    void loadAuditLogs({ from: defaultFrom, to: defaultTo, entityType: '', entityId: '' })
+  }
+
   return (
     <div className="page-shell">
-      <div className="page-top-actions">
-        <button className="secondary-button" disabled={loading || working} onClick={() => { setWorking(true); void loadAuditLogs({ from, to, entityType, entityId }); }} type="button">
-          Refresh logs
-        </button>
-      </div>
-
-
+      <PageHeader
+        actionDisabled={loading || working}
+        actionLabel="Refresh logs"
+        description="Read-only history for user actions and entity changes. Audit entries can be filtered, but never edited or deleted."
+        eyebrow="Audit trail"
+        onAction={handleRefresh}
+        title="Immutable audit logs"
+      />
 
       <section className="analytics-filter-container">
         <form className="analytics-filter" onSubmit={handleSubmit}>
@@ -97,16 +124,24 @@ export function AuditLogs() {
             <button className="primary-button" disabled={loading || working} type="submit">
               Apply filters
             </button>
-            <span className="badge">{items.length} entries</span>
+            <button className="secondary-button" disabled={loading || working} onClick={handleReset} type="button">
+              Reset
+            </button>
+            <span className="badge">{items.length} records</span>
           </div>
         </form>
       </section>
 
       <section className="dashboard-stats">
         <article className="stat-card">
-          <span>Total entries</span>
+          <span>Total records</span>
           <strong>{items.length}</strong>
-          <small>Records returned by current filter</small>
+          <small>Returned by the active filter window</small>
+        </article>
+        <article className="stat-card">
+          <span>Write policy</span>
+          <strong>Append only</strong>
+          <small>No edit or delete actions are available</small>
         </article>
         {actionCounts.map(([action, count]) => (
           <article key={action} className="stat-card">
@@ -121,44 +156,41 @@ export function AuditLogs() {
         <div className="panel__header">
           <div>
             <h3>Event stream</h3>
-            <p className="muted">Most recent audit records first, with structured details where available.</p>
+            <p className="muted">Most recent audit records first, with the required user, action, entity, and timestamp fields.</p>
           </div>
+          <span className="badge">Immutable</span>
         </div>
+        {error ? <div className="form-error">{error}</div> : null}
         <div className="trip-table">
-          <div className="trip-table__head">
-            <span>Time</span>
+          <div className="trip-table__head" style={tableGridStyle}>
+            <span>User</span>
             <span>Action</span>
             <span>Entity</span>
-            <span>Actor</span>
-            <span>Summary</span>
+            <span>Timestamp</span>
           </div>
           {items.length ? (
             items.map((item) => (
-              <div key={item.id} className="trip-table__row trip-table__row--static">
+              <div key={item.id} className="trip-table__row trip-table__row--static" style={tableGridStyle}>
                 <span>
-                  <strong>{formatDateTime(item.createdAt)}</strong>
+                  <strong>{item.actor}</strong>
                   <small>{item.id}</small>
                 </span>
                 <span>
                   <strong>{item.action}</strong>
+                  <small>{item.summary}</small>
+                </span>
+                <span>
+                  <strong>{formatEntity(item)}</strong>
                   <small>{item.entityType}</small>
                 </span>
                 <span>
-                  <strong>{item.entityType}</strong>
-                  <small>{item.entityId}</small>
-                </span>
-                <span>
-                  <strong>{item.actor}</strong>
-                  <small>system/user actor</small>
-                </span>
-                <span>
-                  <strong>{item.summary}</strong>
-                  <small>{item.detailsJson ?? 'No structured details'}</small>
+                  <strong>{formatDateTime(item.createdAt)}</strong>
+                  <small>{item.detailsJson ? 'Details captured' : 'Summary only'}</small>
                 </span>
               </div>
             ))
           ) : (
-            <p className="muted">No audit records matched the current filter.</p>
+            <p className="muted">{loading ? 'Loading audit logs...' : 'No audit records matched the current filter.'}</p>
           )}
         </div>
       </section>

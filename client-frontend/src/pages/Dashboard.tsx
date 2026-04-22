@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
   fetchDashboardActionQueue,
@@ -12,6 +13,29 @@ import type {
   DashboardExceptionItem,
   MaintenanceSchedule,
 } from '../types'
+
+interface DashboardSnapshot {
+  analytics: DashboardAnalytics | null
+  actionQueue: DashboardActionQueueItem[]
+  exceptions: DashboardExceptionItem[]
+  maintenanceSchedules: MaintenanceSchedule[]
+}
+
+async function loadDashboardSnapshot(): Promise<DashboardSnapshot> {
+  const [analytics, actionQueue, exceptions, maintenanceSchedules] = await Promise.all([
+    fetchDashboardAnalytics(),
+    fetchDashboardActionQueue(),
+    fetchDashboardExceptions(),
+    fetchMaintenanceSchedules(),
+  ])
+
+  return {
+    analytics,
+    actionQueue,
+    exceptions,
+    maintenanceSchedules,
+  }
+}
 
 function toneClass(tone: DashboardAnalytics['kpis'][number]['tone']) {
   return `dashboard-summary-card tone-${tone}`
@@ -91,35 +115,15 @@ function SectionCard({
 }
 
 export function Dashboard() {
-  const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null)
-  const [actionQueue, setActionQueue] = useState<DashboardActionQueueItem[]>([])
-  const [exceptions, setExceptions] = useState<DashboardExceptionItem[]>([])
-  const [maintenanceSchedules, setMaintenanceSchedules] = useState<MaintenanceSchedule[]>([])
-  const [loading, setLoading] = useState(true)
-  
-  async function loadDashboard() {
-    setLoading(true)
+  const dashboardQuery = useQuery({
+    queryKey: ['dashboard', 'snapshot'],
+    queryFn: loadDashboardSnapshot,
+  })
 
-    try {
-      const [analyticsData, queueData, exceptionData, scheduleData] = await Promise.all([
-        fetchDashboardAnalytics(),
-        fetchDashboardActionQueue(),
-        fetchDashboardExceptions(),
-        fetchMaintenanceSchedules(),
-      ])
-
-      setAnalytics(analyticsData)
-      setActionQueue(queueData)
-      setExceptions(exceptionData)
-      setMaintenanceSchedules(scheduleData)
-    } catch (error: unknown) { console.error(error);  console.error(); } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    void loadDashboard()
-  }, [])
+  const analytics = dashboardQuery.data?.analytics ?? null
+  const actionQueue = dashboardQuery.data?.actionQueue ?? []
+  const exceptions = dashboardQuery.data?.exceptions ?? []
+  const maintenanceSchedules = dashboardQuery.data?.maintenanceSchedules ?? []
 
   const blockedMaintenance = useMemo(
     () =>
@@ -136,7 +140,7 @@ export function Dashboard() {
   return (
     <div className="dashboard-page page-shell">
       <div className="page-top-actions">
-        <button className="secondary-button" disabled={loading} onClick={() => { void loadDashboard(); }} type="button">
+        <button className="secondary-button" disabled={dashboardQuery.isFetching} onClick={() => { void dashboardQuery.refetch() }} type="button">
           Refresh control tower
         </button>
       </div>

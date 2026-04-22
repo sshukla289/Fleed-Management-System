@@ -18,24 +18,20 @@ import type {
   CreateAdminUserInput,
   UpdateAdminUserInput,
 } from '../types'
+import {
+  patchAdminUsersState,
+  resetAdminUsersState,
+  type AdminUsersBannerState as BannerState,
+  type AdminUsersModalMode as ModalMode,
+} from '../store/adminModuleSlice'
+import { useAppDispatch, useAppSelector } from '../store/hooks'
 import './AdminUsers.css'
-
-type ModalMode = 'create' | 'edit' | 'role'
-type RowAction = 'status' | 'reset' | 'delete'
-type BannerTone = 'success' | 'error' | 'info'
 
 interface UserFormState {
   name: string
   email: string
   role: AppRole
   active: boolean
-}
-
-interface BannerState {
-  tone: BannerTone
-  title: string
-  message: string
-  secret?: string
 }
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
@@ -126,32 +122,38 @@ function PlusGlyph() {
 export function AdminUsersPage() {
   const { session } = useAuth()
   const queryClient = useQueryClient()
+  const dispatch = useAppDispatch()
   const currentUserId = session?.profile.id
+  const {
+    search,
+    roleFilter,
+    statusFilter,
+    page,
+    pageSize,
+    modalMode,
+    selectedUser,
+    banner,
+    rowAction,
+  } = useAppSelector((state) => state.adminModule.users)
 
-  const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
-  const [roleFilter, setRoleFilter] = useState<'ALL' | AppRole>('ALL')
-  const [statusFilter, setStatusFilter] = useState<'ALL' | AdminUserStatus>('ALL')
-  const [page, setPage] = useState(0)
-  const [pageSize, setPageSize] = useState(25)
-  const [modalMode, setModalMode] = useState<ModalMode | null>(null)
-  const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [formState, setFormState] = useState<UserFormState>(createEmptyForm())
-  const [banner, setBanner] = useState<BannerState | null>(null)
-  const [rowAction, setRowAction] = useState<{ userId: string; action: RowAction } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [modalError, setModalError] = useState('')
   const closeModal = useCallback(() => {
-    setModalMode(null)
-    setEditingUser(null)
+    dispatch(patchAdminUsersState({ modalMode: null, selectedUser: null }))
     setFormState(createEmptyForm())
     setModalError('')
     setIsSubmitting(false)
-  }, [])
+  }, [dispatch])
 
   useEffect(() => {
-    setPage(0)
-  }, [deferredSearch, roleFilter, statusFilter, pageSize])
+    dispatch(resetAdminUsersState())
+  }, [dispatch])
+
+  useEffect(() => {
+    dispatch(patchAdminUsersState({ page: 0 }))
+  }, [deferredSearch, dispatch, pageSize, roleFilter, statusFilter])
 
   const usersQuery = useQuery({
     queryKey: ['admin-users', page, pageSize, deferredSearch, roleFilter, statusFilter],
@@ -169,14 +171,14 @@ export function AdminUsersPage() {
   useEffect(() => {
     const totalPages = usersQuery.data?.totalPages ?? 0
     if (totalPages === 0 && page !== 0) {
-      setPage(0)
+      dispatch(patchAdminUsersState({ page: 0 }))
       return
     }
 
     if (totalPages > 0 && page >= totalPages) {
-      setPage(totalPages - 1)
+      dispatch(patchAdminUsersState({ page: totalPages - 1 }))
     }
-  }, [page, usersQuery.data?.totalPages])
+  }, [dispatch, page, usersQuery.data?.totalPages])
 
   useEffect(() => {
     if (!modalMode) {
@@ -222,21 +224,19 @@ export function AdminUsersPage() {
   )
 
   function openCreateModal() {
-    setEditingUser(null)
+    dispatch(patchAdminUsersState({ modalMode: 'create', selectedUser: null }))
     setFormState(createEmptyForm())
-    setModalMode('create')
     setModalError('')
   }
 
   function openEditModal(user: AdminUser, mode: ModalMode = 'edit') {
-    setEditingUser(user)
+    dispatch(patchAdminUsersState({ modalMode: mode, selectedUser: user }))
     setFormState(buildFormState(user))
-    setModalMode(mode)
     setModalError('')
   }
 
   function showBanner(nextBanner: BannerState) {
-    setBanner(nextBanner)
+    dispatch(patchAdminUsersState({ banner: nextBanner }))
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -269,17 +269,17 @@ export function AdminUsersPage() {
           secret: result.temporaryPassword,
         })
         closeModal()
-        setPage(0)
+        dispatch(patchAdminUsersState({ page: 0 }))
         await queryClient.invalidateQueries({ queryKey: ['admin-users'] })
         return
       }
 
-      if (!editingUser) {
+      if (!selectedUser) {
         setModalError('Select a user to edit.')
         return
       }
 
-      const original = buildFormState(editingUser)
+      const original = buildFormState(selectedUser)
       const shouldUseRoleEndpoint =
         modalMode === 'role' &&
         payloadName === original.name &&
@@ -288,7 +288,7 @@ export function AdminUsersPage() {
         payloadRole !== original.role
 
       if (shouldUseRoleEndpoint) {
-        const updated = await updateUserRole(editingUser.id, { role: payloadRole })
+        const updated = await updateUserRole(selectedUser.id, { role: payloadRole })
         showBanner({
           tone: 'success',
           title: `Role updated: ${updated.name}`,
@@ -301,7 +301,7 @@ export function AdminUsersPage() {
           role: payloadRole,
           active: formState.active,
         }
-        const updated = await updateAdminUser(editingUser.id, payload)
+        const updated = await updateAdminUser(selectedUser.id, payload)
         showBanner({
           tone: 'success',
           title: `User updated: ${updated.name}`,
@@ -325,7 +325,7 @@ export function AdminUsersPage() {
       return
     }
 
-    setRowAction({ userId: user.id, action: 'status' })
+    dispatch(patchAdminUsersState({ rowAction: { userId: user.id, action: 'status' } }))
 
     try {
       const updated = await updateAdminUser(user.id, {
@@ -348,7 +348,7 @@ export function AdminUsersPage() {
         message: error instanceof Error ? error.message : 'Unable to change user status.',
       })
     } finally {
-      setRowAction(null)
+      dispatch(patchAdminUsersState({ rowAction: null }))
     }
   }
 
@@ -358,7 +358,7 @@ export function AdminUsersPage() {
       return
     }
 
-    setRowAction({ userId: user.id, action: 'reset' })
+    dispatch(patchAdminUsersState({ rowAction: { userId: user.id, action: 'reset' } }))
 
     try {
       const result: AdminUserMutationResult = await resetAdminUserPassword(user.id)
@@ -376,7 +376,7 @@ export function AdminUsersPage() {
         message: error instanceof Error ? error.message : 'Unable to reset password.',
       })
     } finally {
-      setRowAction(null)
+      dispatch(patchAdminUsersState({ rowAction: null }))
     }
   }
 
@@ -395,7 +395,7 @@ export function AdminUsersPage() {
       return
     }
 
-    setRowAction({ userId: user.id, action: 'delete' })
+    dispatch(patchAdminUsersState({ rowAction: { userId: user.id, action: 'delete' } }))
 
     try {
       await deleteAdminUser(user.id)
@@ -412,12 +412,12 @@ export function AdminUsersPage() {
         message: error instanceof Error ? error.message : 'Unable to delete user.',
       })
     } finally {
-      setRowAction(null)
+      dispatch(patchAdminUsersState({ rowAction: null }))
     }
   }
 
   function handleDismissBanner() {
-    setBanner(null)
+    dispatch(patchAdminUsersState({ banner: null }))
   }
 
   function handleCopySecret() {
@@ -510,13 +510,16 @@ export function AdminUsersPage() {
                 placeholder="Name, email, or role..."
                 type="search"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => dispatch(patchAdminUsersState({ search: event.target.value }))}
               />
             </div>
           </label>
           <label>
             <span>Role</span>
-            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as 'ALL' | AppRole)}>
+            <select
+              value={roleFilter}
+              onChange={(event) => dispatch(patchAdminUsersState({ roleFilter: event.target.value as 'ALL' | AppRole }))}
+            >
               {ROLE_FILTER_OPTIONS.map((role) => (
                 <option key={role} value={role}>
                   {role === 'ALL' ? 'All roles' : formatRoleLabel(role)}
@@ -526,7 +529,10 @@ export function AdminUsersPage() {
           </label>
           <label>
             <span>Status</span>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'ALL' | AdminUserStatus)}>
+            <select
+              value={statusFilter}
+              onChange={(event) => dispatch(patchAdminUsersState({ statusFilter: event.target.value as 'ALL' | AdminUserStatus }))}
+            >
               {STATUS_FILTER_OPTIONS.map((status) => (
                 <option key={status} value={status}>
                   {status === 'ALL' ? 'All statuses' : formatStatusLabel(status)}
@@ -536,7 +542,7 @@ export function AdminUsersPage() {
           </label>
           <label>
             <span>Page size</span>
-            <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+            <select value={pageSize} onChange={(event) => dispatch(patchAdminUsersState({ pageSize: Number(event.target.value) }))}>
               {PAGE_SIZE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {option} rows
@@ -545,12 +551,18 @@ export function AdminUsersPage() {
             </select>
           </label>
           <div className="admin-users-filter__actions">
-            <button className="secondary-button" disabled={isBusy || isSubmitting} onClick={() => {
-              setSearch('')
-              setRoleFilter('ALL')
-              setStatusFilter('ALL')
-              setPageSize(25)
-            }} type="button">
+            <button
+              className="secondary-button"
+              disabled={isBusy || isSubmitting}
+              onClick={() => dispatch(patchAdminUsersState({
+                search: '',
+                roleFilter: 'ALL',
+                statusFilter: 'ALL',
+                page: 0,
+                pageSize: 25,
+              }))}
+              type="button"
+            >
               Reset filters
             </button>
             <button className="primary-button" disabled={isBusy || isSubmitting} onClick={openCreateModal} type="button">
@@ -702,7 +714,7 @@ export function AdminUsersPage() {
             <button
               className="secondary-button"
               disabled={page <= 0 || totalPages === 0}
-              onClick={() => setPage((current) => Math.max(0, current - 1))}
+              onClick={() => dispatch(patchAdminUsersState({ page: Math.max(0, page - 1) }))}
               type="button"
             >
               Previous
@@ -710,7 +722,7 @@ export function AdminUsersPage() {
             <button
               className="secondary-button"
               disabled={totalPages === 0 || page >= totalPages - 1}
-              onClick={() => setPage((current) => Math.min(Math.max(totalPages - 1, 0), current + 1))}
+              onClick={() => dispatch(patchAdminUsersState({ page: Math.min(Math.max(totalPages - 1, 0), page + 1) }))}
               type="button"
             >
               Next

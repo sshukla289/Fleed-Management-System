@@ -14,6 +14,7 @@ public record NotificationDTO(
     String entityId,
     String tripId,
     String vehicleId,
+    String recipientUserId,
     String metadataJson,
     LocalDateTime createdAt,
     LocalDateTime readAt,
