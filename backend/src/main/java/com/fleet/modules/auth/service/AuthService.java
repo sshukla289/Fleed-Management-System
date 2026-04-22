@@ -5,6 +5,8 @@ import com.fleet.modules.auth.dto.LoginRequest;
 import com.fleet.modules.auth.entity.AppRole;
 import com.fleet.modules.auth.entity.AppUser;
 import com.fleet.modules.auth.repository.AppUserRepository;
+import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.profile.dto.ProfileDTO;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,17 +20,20 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthSessionService authSessionService;
     private final CurrentUserService currentUserService;
+    private final DriverRepository driverRepository;
 
     public AuthService(
         AppUserRepository appUserRepository,
         PasswordEncoder passwordEncoder,
         AuthSessionService authSessionService,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        DriverRepository driverRepository
     ) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.authSessionService = authSessionService;
         this.currentUserService = currentUserService;
+        this.driverRepository = driverRepository;
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -42,12 +47,14 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email and password are required.");
         }
 
-        String email = request.email().trim();
+        String normalizedEmail = request.email().trim();
+        if (normalizedEmail.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email and password are required.");
+        }
 
-        AppUser user = appUserRepository.findByLoginEmailIgnoreCase(email)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials."));
+        AppUser user = findUserForLogin(normalizedEmail);
 
-        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+        if (!passwordMatches(request.password(), user)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials.");
         }
 
@@ -72,13 +79,58 @@ public class AuthService {
         authSessionService.revokeSession(token);
     }
 
+    private AppUser findUserForLogin(String normalizedEmail) {
+        AppUser user = appUserRepository.findByLoginEmailIgnoreCase(normalizedEmail)
+            .or(() -> appUserRepository.findByEmailIgnoreCase(normalizedEmail))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials."));
+
+        if (user.getLoginEmail() == null || user.getLoginEmail().isBlank()) {
+            user.setLoginEmail(normalizedEmail);
+            return appUserRepository.save(user);
+        }
+
+        return user;
+    }
+
+    private boolean passwordMatches(String rawPassword, AppUser user) {
+        String storedPassword = user.getPassword();
+        if (storedPassword == null || storedPassword.isBlank()) {
+            return false;
+        }
+
+        if (passwordEncoder.matches(rawPassword, storedPassword)) {
+            return true;
+        }
+
+        // Support older local databases that still contain plaintext passwords and
+        // upgrade them to the configured hash after a successful login.
+        if (storedPassword.equals(rawPassword)) {
+            user.setPassword(passwordEncoder.encode(rawPassword));
+            appUserRepository.save(user);
+            return true;
+        }
+
+        return false;
+    }
+
     private ProfileDTO toProfile(AppUser user) {
         return new ProfileDTO(
             user.getId(),
-            user.getName(),
+            resolveDisplayName(user),
             AppRole.fromStoredValue(user.getRole()).name(),
             user.getEmail(),
             user.getAssignedRegion() == null ? "" : user.getAssignedRegion()
         );
+    }
+
+    private String resolveDisplayName(AppUser user) {
+        if (AppRole.fromStoredValue(user.getRole()) != AppRole.DRIVER) {
+            return user.getName();
+        }
+
+        return driverRepository.findById(user.getId())
+            .map(Driver::getName)
+            .filter(name -> name != null && !name.isBlank())
+            .orElse(user.getName());
     }
 }

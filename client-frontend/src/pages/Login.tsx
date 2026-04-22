@@ -12,16 +12,35 @@ export function Login() {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  function buildLoginErrorMessage(error: unknown) {
+    if (!(error instanceof Error) || !error.message.trim()) {
+      return 'Unable to sign in right now. Please try again.'
+    }
+
+    const message = error.message.trim()
+    const normalizedMessage = message.toLowerCase()
+
+    if (normalizedMessage.includes('failed to fetch') || normalizedMessage.includes('networkerror')) {
+      return 'Unable to reach the server. Make sure the backend is running and try again.'
+    }
+
+    if (normalizedMessage === 'invalid credentials.' || normalizedMessage === 'invalid credentials') {
+      return 'Invalid credentials. If you are using demo users, sign in with driver@gmail.com / password after the backend finishes starting.'
+    }
+
+    return message
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setIsSubmitting(true)
 
     try {
-      await login({ email, password })
+      await login({ email: email.trim(), password })
       navigate('/', { replace: true })
-    } catch {
-      setError('Invalid credentials. Please verify your email and password.')
+    } catch (error: unknown) {
+      setError(buildLoginErrorMessage(error))
     } finally {
       setIsSubmitting(false)
     }

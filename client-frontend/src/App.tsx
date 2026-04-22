@@ -17,6 +17,7 @@ const AuditLogs = lazy(() => import('./pages/AuditLogs').then((module) => ({ def
 const AlertsCenter = lazy(() => import('./pages/AlertsCenter').then((module) => ({ default: module.AlertsCenter })))
 const DriverList = lazy(() => import('./pages/DriverList').then((module) => ({ default: module.DriverList })))
 const DispatcherDashboard = lazy(() => import('./pages/DispatcherDashboard').then((module) => ({ default: module.DispatcherDashboard })))
+const DriverPerformance = lazy(() => import('./pages/DriverPerformance').then((module) => ({ default: module.DriverPerformance })))
 const Login = lazy(() => import('./pages/Login').then((module) => ({ default: module.Login })))
 const MaintenanceAlerts = lazy(() => import('./pages/MaintenanceAlerts').then((module) => ({ default: module.MaintenanceAlerts })))
 const MaintenanceDashboard = lazy(() => import('./pages/MaintenanceDashboard').then((module) => ({ default: module.MaintenanceDashboard })))
@@ -156,6 +157,9 @@ function App() {
         <Route path="/driver/trip-execution" element={<RoleRoute allowedRoles={['DRIVER']} />}>
           <Route index element={<RouteLoader><TripExecutionPage /></RouteLoader>} />
         </Route>
+        <Route path="/driver/performance" element={<RoleRoute allowedRoles={['DRIVER']} />}>
+          <Route index element={<RouteLoader><DriverPerformance /></RouteLoader>} />
+        </Route>
         <Route path="/dispatcher/dashboard" element={<RoleRoute allowedRoles={['DISPATCHER']} />}>
           <Route index element={<RouteLoader><DispatcherDashboard /></RouteLoader>} />
         </Route>
@@ -168,6 +172,8 @@ function App() {
 
         <Route element={<RoleRoute allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DISPATCHER', 'PLANNER', 'MAINTENANCE_MANAGER', 'DRIVER']} />}>
           <Route path="/dashboard" element={<Navigate to={defaultPath} replace />} />
+        </Route>
+        <Route element={<RoleRoute allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DISPATCHER', 'PLANNER', 'MAINTENANCE_MANAGER']} />}>
           <Route path="/analytics/reports" element={<RouteLoader><AnalyticsReports /></RouteLoader>} />
         </Route>
         <Route element={<RoleRoute allowedRoles={['ADMIN', 'OPERATIONS_MANAGER']} />}>

@@ -1,5 +1,8 @@
 package com.fleet.modules.trip.controller;
 
+import com.fleet.modules.otp.dto.TripOtpSummaryDTO;
+import com.fleet.modules.otp.dto.ValidateTripOtpRequest;
+import com.fleet.modules.otp.service.OtpService;
 import com.fleet.modules.telemetry.dto.TelemetryDTO;
 import com.fleet.modules.telemetry.service.TelemetryService;
 import com.fleet.modules.trip.dto.CompleteTripRequest;
@@ -26,11 +29,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class TripController {
 
     private final TripService tripService;
+    private final OtpService otpService;
     private final TelemetryService telemetryService;
     private final com.fleet.modules.trip.service.TripUpdateService tripUpdateService;
 
-    public TripController(TripService tripService, TelemetryService telemetryService, com.fleet.modules.trip.service.TripUpdateService tripUpdateService) {
+    public TripController(
+        TripService tripService,
+        OtpService otpService,
+        TelemetryService telemetryService,
+        com.fleet.modules.trip.service.TripUpdateService tripUpdateService
+    ) {
         this.tripService = tripService;
+        this.otpService = otpService;
         this.telemetryService = telemetryService;
         this.tripUpdateService = tripUpdateService;
     }
@@ -84,13 +94,28 @@ public class TripController {
     }
 
     @PostMapping("/{tripId}/start")
-    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','DRIVER')")
+    @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<TripDTO> startTrip(@PathVariable String tripId) {
         return ResponseEntity.ok(tripService.startTrip(tripId));
     }
 
+    @PostMapping("/{tripId}/resend-otp")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<TripOtpSummaryDTO> resendOtp(@PathVariable String tripId) {
+        return ResponseEntity.ok(otpService.resendOtp(tripId));
+    }
+
+    @PostMapping("/{tripId}/otp/validate")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<TripOtpSummaryDTO> validateOtp(
+        @PathVariable String tripId,
+        @Valid @RequestBody ValidateTripOtpRequest request
+    ) {
+        return ResponseEntity.ok(otpService.validateOtp(tripId, request.otp()));
+    }
+
     @PostMapping("/{tripId}/pause")
-    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','DRIVER')")
+    @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<TripDTO> pauseTrip(
         @PathVariable String tripId,
         @RequestParam(required = false) String reason
@@ -99,13 +124,13 @@ public class TripController {
     }
 
     @PostMapping("/{tripId}/resume")
-    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','DRIVER')")
+    @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<TripDTO> resumeTrip(@PathVariable String tripId) {
         return ResponseEntity.ok(tripService.resumeTrip(tripId));
     }
 
     @PostMapping("/{tripId}/complete")
-    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','DRIVER')")
+    @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<TripDTO> completeTrip(
         @PathVariable String tripId,
         @Valid @RequestBody CompleteTripRequest request
@@ -114,7 +139,7 @@ public class TripController {
     }
 
     @PostMapping("/{tripId}/stops/{sequence}/status")
-    @PreAuthorize("hasAnyRole('ADMIN','OPERATIONS_MANAGER','DISPATCHER','DRIVER')")
+    @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<TripDTO> updateStopStatus(
         @PathVariable String tripId,
         @PathVariable int sequence,

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 public interface AppUserRepository extends JpaRepository<AppUser, String>, JpaSpecificationExecutor<AppUser> {
     Optional<AppUser> findByLoginEmailIgnoreCase(String loginEmail);
+    Optional<AppUser> findByEmailIgnoreCase(String email);
 
     boolean existsByEmailIgnoreCase(String email);
 

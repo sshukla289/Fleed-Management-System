@@ -3,6 +3,17 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/fleet_db}
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:root}
+  mail:
+    host: ${SPRING_MAIL_HOST:}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:true}
   servlet:
     multipart:
       max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:5MB}
@@ -33,6 +44,16 @@ app:
     latest-state-ttl-hours: ${APP_TRACKING_LATEST_STATE_TTL_HOURS:24}
   storage:
     public-root-dir: ${APP_STORAGE_PUBLIC_ROOT_DIR:uploads}
+  pod:
+    otp-ttl-minutes: ${APP_POD_OTP_TTL_MINUTES:5}
+    otp-resend-limit-per-hour: ${APP_POD_OTP_RESEND_LIMIT_PER_HOUR:3}
+    otp-resend-cooldown-seconds: ${APP_POD_OTP_RESEND_COOLDOWN_SECONDS:30}
+    otp-max-delivery-retries: ${APP_POD_OTP_MAX_DELIVERY_RETRIES:5}
+    otp-retry-initial-delay-seconds: ${APP_POD_OTP_RETRY_INITIAL_DELAY_SECONDS:30}
+    otp-retry-scan-delay-ms: ${APP_POD_OTP_RETRY_SCAN_DELAY_MS:30000}
+    email:
+      enabled: ${APP_POD_EMAIL_ENABLED:false}
+      from: ${APP_POD_EMAIL_FROM:${SPRING_MAIL_USERNAME:}}
 
 server:
   port: ${SERVER_PORT:8080}

@@ -1,5 +1,7 @@
 package com.fleet.modules.trip.dto;
 
+import com.fleet.modules.otp.dto.TripOtpSummaryDTO;
+import com.fleet.modules.pod.dto.PODDTO;
 import com.fleet.modules.trip.entity.TripComplianceStatus;
 import com.fleet.modules.trip.entity.TripDispatchStatus;
 import com.fleet.modules.trip.entity.TripOptimizationStatus;
@@ -17,6 +19,7 @@ public record TripDTO(
     TripPriority priority,
     String source,
     String destination,
+    String recipientEmail,
     List<TripStopDTO> stops,
 
     LocalDateTime plannedStartTime,
@@ -35,5 +38,7 @@ public record TripDTO(
     String pauseReason,
     Integer delayMinutes,
     Double fuelUsed,
-    LocalDateTime completionProcessedAt
+    LocalDateTime completionProcessedAt,
+    TripOtpSummaryDTO otp,
+    PODDTO pod
 ) {}

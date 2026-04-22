@@ -24,6 +24,10 @@ const titles: Record<string, { title: string; subtitle: string }> = {
     title: 'Trip Execution',
     subtitle: 'Complete pre-trip and post-trip checklists before each driver action.',
   },
+  '/driver/performance': {
+    title: 'Driver Performance',
+    subtitle: 'Historical performance, safety, fuel, and trip efficiency insights.',
+  },
   '/dispatcher/dashboard': {
     title: 'Dispatcher Dashboard',
     subtitle: 'Real-time fleet command: monitoring, driver assignment, and live alerts.',

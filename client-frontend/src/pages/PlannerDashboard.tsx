@@ -33,6 +33,7 @@ export function PlannerDashboard() {
     assignedDriverId: '',
     source: '',
     destination: '',
+    recipientEmail: '',
     stops: [],
     plannedStartTime: new Date(Date.now() + 86400000).toISOString().split('T')[0] + 'T08:00',
     plannedEndTime: new Date(Date.now() + 86400000).toISOString().split('T')[0] + 'T20:00',
@@ -89,6 +90,11 @@ export function PlannerDashboard() {
   }
 
   const handleSaveTrip = async () => {
+    if (!tripForm.recipientEmail?.trim()) {
+      setMessage('Recipient email is required so the delivery OTP can be sent.')
+      return
+    }
+
     setWorking(true)
     try {
       const trip = await createTrip(tripForm)
@@ -189,6 +195,15 @@ export function PlannerDashboard() {
               <label className="dd-form__field">
                 <small>Final Destination</small>
                 <input type="text" value={tripForm.destination} onChange={e => setTripForm({...tripForm, destination: e.target.value})} placeholder="e.g. Pune Warehouse" />
+              </label>
+              <label className="dd-form__field">
+                <small>POD OTP Email</small>
+                <input
+                  type="email"
+                  value={tripForm.recipientEmail ?? ''}
+                  onChange={e => setTripForm({ ...tripForm, recipientEmail: e.target.value })}
+                  placeholder="Recipient address for delivery OTP"
+                />
               </label>
               <label className="dd-form__field">
                 <small>Planned Start</small>

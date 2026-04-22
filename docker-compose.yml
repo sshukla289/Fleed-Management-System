@@ -1,7 +1,8 @@
+name: ${COMPOSE_PROJECT_NAME:-fleet_management_system_projects}
+
 services:
   mysql:
     image: mysql:8.4
-    container_name: fleet-mysql
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-fleet_db}
       MYSQL_USER: ${MYSQL_USER:-fleet_app}
@@ -9,7 +10,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-fleet_root_dev_password}
     command: ["mysqld", "--skip-name-resolve"]
     ports:
-      - "127.0.0.1:3306:3306"
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - mysql_data_v2:/var/lib/mysql
     healthcheck:
@@ -24,7 +25,6 @@ services:
     build:
       context: ./backend
       target: dev
-    container_name: fleet-backend
     depends_on:
       mysql:
         condition: service_healthy
@@ -34,10 +34,19 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-fleet_app_dev_password}
       SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
       SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-true}
+      APP_WEBSOCKET_ALLOWED_ORIGIN_PATTERNS: ${APP_WEBSOCKET_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5174,http://127.0.0.1:5174}
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-true}
       APP_SEED_ENABLED: ${APP_SEED_ENABLED:-false}
+      APP_POD_EMAIL_FROM: ${APP_POD_EMAIL_FROM:-}
+      APP_POD_EMAIL_ENABLED: ${APP_POD_EMAIL_ENABLED:-false}
       SERVER_PORT: 8080
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${BACKEND_PORT:-8081}:8080"
     volumes:
       - ./backend/src:/workspace/src:ro
       - backend_target:/workspace/target
@@ -54,15 +63,16 @@ services:
     build:
       context: ./client-frontend
       target: dev
-    container_name: fleet-frontend
     depends_on:
       - backend
     environment:
-      - CHOKIDAR_USEPOLLING=true
-      - VITE_USE_POLLING=true
-      - WATCHPACK_POLLING=true
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_USE_POLLING: "true"
+      WATCHPACK_POLLING: "true"
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8081/api}
+      VITE_HTTP_BASE_URL: ${VITE_HTTP_BASE_URL:-http://localhost:8081}
     ports:
-      - "127.0.0.1:5173:5173"
+      - "127.0.0.1:${FRONTEND_PORT:-5174}:5173"
     volumes:
       - ./client-frontend/src:/workspace/src:ro
       - ./client-frontend/public:/workspace/public:ro

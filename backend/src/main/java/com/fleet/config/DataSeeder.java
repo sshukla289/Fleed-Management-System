@@ -71,10 +71,10 @@ public class DataSeeder {
 
             if (driverRepository.count() == 0) {
                 driverRepository.saveAll(List.of(
-                    new Driver("DR-201", "Aarav Sharma", DriverDutyStatus.ON_DUTY.value(), "HMV", "MH-14-DR-9087", "2027-08-30", "Morning", "VH-101", 5.2),
-                    new Driver("DR-202", "Nisha Patel", DriverDutyStatus.RESTING.value(), "LMV", "MH-12-DR-5521", "2028-01-14", "Evening", "VH-102", 3.4),
-                    new Driver("DR-203", "Rohan Verma", DriverDutyStatus.OFF_DUTY.value(), "HMV", "MH-31-DR-7744", "2026-11-02", "Night", "VH-103", 0),
-                    new Driver("DR-204", "Ishita Mehra", DriverDutyStatus.ON_DUTY.value(), "Transport", "KA-03-DR-4412", "2027-05-19", "Morning", "VH-104", 6.1)
+                    new Driver("DR-201", "Aarav Sharma", DriverDutyStatus.ON_DUTY.value(), "HMV", "MH-14-DR-9087", "2027-08-30", "Morning", "+91 98765 43210", "VH-101", 5.2),
+                    new Driver("DR-202", "Nisha Patel", DriverDutyStatus.RESTING.value(), "LMV", "MH-12-DR-5521", "2028-01-14", "Evening", "+91 98765 43211", "VH-102", 3.4),
+                    new Driver("DR-203", "Rohan Verma", DriverDutyStatus.OFF_DUTY.value(), "HMV", "MH-31-DR-7744", "2026-11-02", "Night", "+91 98765 43212", "VH-103", 0),
+                    new Driver("DR-204", "Ishita Mehra", DriverDutyStatus.ON_DUTY.value(), "Transport", "KA-03-DR-4412", "2027-05-19", "Morning", "+91 98765 43213", "VH-104", 6.1)
                 ));
             }
 
@@ -190,8 +190,7 @@ public class DataSeeder {
             }
 
             if (tripRepository.count() == 0) {
-                tripRepository.saveAll(List.of(
-                    new Trip(
+                Trip tripOne = new Trip(
                         "TRIP-1001",
                         "RT-501",
                         "VH-101",
@@ -218,8 +217,10 @@ public class DataSeeder {
                             new TripStop("Pune Depot", 3, 18.5204, 73.8567, StopStatus.IN_PROGRESS),
                             new TripStop("Satara Crossdock", 4, 17.6805, 74.0183, StopStatus.PENDING)
                         )
-                    ),
-                    new Trip(
+                    );
+                tripOne.setRecipientEmail("recipient1@example.com");
+
+                Trip tripTwo = new Trip(
                         "TRIP-1002",
                         "RT-502",
                         "VH-103",
@@ -245,8 +246,80 @@ public class DataSeeder {
                             new TripStop("Wardha", 2, 20.7453, 78.6022, StopStatus.PENDING),
                             new TripStop("Amravati", 3, 20.9374, 77.7796, StopStatus.PENDING)
                         )
+                    );
+                tripTwo.setRecipientEmail("recipient2@example.com");
+
+                tripRepository.saveAll(List.of(tripOne, tripTwo));
+            }
+
+            if (tripRepository.findById("TRIP-1004").isEmpty()) {
+                Trip completedDriverTrip = new Trip(
+                    "TRIP-1004",
+                    "RT-503",
+                    "VH-101",
+                    "DR-201",
+                    "Mumbai Hub",
+                    "Nashik Transfer Point",
+                    TripStatus.COMPLETED,
+                    TripPriority.MEDIUM,
+                    TripDispatchStatus.DISPATCHED,
+                    TripComplianceStatus.COMPLIANT,
+                    TripOptimizationStatus.OPTIMIZED,
+                    LocalDateTime.now().minusDays(1).minusHours(4),
+                    LocalDateTime.now().minusDays(1).minusHours(1),
+                    LocalDateTime.now().minusDays(1).minusHours(4),
+                    LocalDateTime.now().minusDays(1).minusHours(1).minusMinutes(8),
+                    180,
+                    176,
+                    "3h 00m",
+                    "2h 52m",
+                    "Completed transfer run ahead of schedule.",
+                    List.of(
+                        new TripStop("Mumbai Hub", 1, 19.0760, 72.8777, StopStatus.COMPLETED),
+                        new TripStop("Igatpuri", 2, 19.6952, 73.5626, StopStatus.COMPLETED),
+                        new TripStop("Nashik Transfer Point", 3, 19.9975, 73.7898, StopStatus.COMPLETED)
                     )
-                ));
+                );
+                completedDriverTrip.setRecipientEmail("recipient4@example.com");
+                completedDriverTrip.setCompletionProcessedAt(LocalDateTime.now().minusDays(1).minusHours(1).minusMinutes(5));
+                completedDriverTrip.setFuelUsed(22.5);
+                completedDriverTrip.setDelayMinutes(0);
+                tripRepository.save(completedDriverTrip);
+            }
+
+            if (tripRepository.findById("TRIP-1005").isEmpty()) {
+                Trip completedFleetTrip = new Trip(
+                    "TRIP-1005",
+                    "RT-503",
+                    "VH-104",
+                    "DR-204",
+                    "Bengaluru Center",
+                    "Yelahanka",
+                    TripStatus.COMPLETED,
+                    TripPriority.MEDIUM,
+                    TripDispatchStatus.DISPATCHED,
+                    TripComplianceStatus.COMPLIANT,
+                    TripOptimizationStatus.OPTIMIZED,
+                    LocalDateTime.now().minusDays(2).minusHours(3),
+                    LocalDateTime.now().minusDays(2).minusHours(1),
+                    LocalDateTime.now().minusDays(2).minusHours(3),
+                    LocalDateTime.now().minusDays(2).minusHours(0).minusMinutes(42),
+                    96,
+                    98,
+                    "2h 10m",
+                    "2h 18m",
+                    "Completed southern sweep with minor traffic delay.",
+                    List.of(
+                        new TripStop("Bengaluru Center", 1, 12.9716, 77.5946, StopStatus.COMPLETED),
+                        new TripStop("Whitefield", 2, 12.9698, 77.7499, StopStatus.COMPLETED),
+                        new TripStop("Yelahanka", 3, 13.1007, 77.5963, StopStatus.COMPLETED)
+                    )
+                );
+                completedFleetTrip.setRecipientEmail("recipient5@example.com");
+                completedFleetTrip.setCompletionProcessedAt(LocalDateTime.now().minusDays(2).minusHours(0).minusMinutes(35));
+                completedFleetTrip.setFuelUsed(11.2);
+                completedFleetTrip.setDelayMinutes(18);
+                tripRepository.save(completedFleetTrip);
             }
 
             upsertUser(appUserRepository, passwordEncoder, "USR-1", "Operations Manager Console", AppRole.OPERATIONS_MANAGER, "operations_manager@gmail.com", "West and South India", "operations_manager@gmail.com", "password");
@@ -254,7 +327,7 @@ public class DataSeeder {
             upsertUser(appUserRepository, passwordEncoder, "USR-3", "Dispatcher Console", AppRole.DISPATCHER, "dispatcher@gmail.com", "West Corridor", "dispatcher@gmail.com", "password");
             upsertUser(appUserRepository, passwordEncoder, "USR-5", "Route Planner Console", AppRole.PLANNER, "planner@gmail.com", "Regional Hubs", "planner@gmail.com", "password");
             upsertUser(appUserRepository, passwordEncoder, "USR-4", "Maintenance Manager Console", AppRole.MAINTENANCE_MANAGER, "maintenance_manager@gmail.com", "Workshop Bay", "maintenance_manager@gmail.com", "password");
-            upsertUser(appUserRepository, passwordEncoder, "DR-201", "Driver Execution Console", AppRole.DRIVER, "driver@gmail.com", "Field Operations", "driver@gmail.com", "password");
+            upsertUser(appUserRepository, passwordEncoder, "DR-201", "Aarav Sharma", AppRole.DRIVER, "driver@gmail.com", "Field Operations", "driver@gmail.com", "password");
 
             if (telemetryRepository.count() == 0) {
                 telemetryRepository.saveAll(List.of(
@@ -263,6 +336,41 @@ public class DataSeeder {
                     createTelemetry("VH-101", "TRIP-1001", 19.1480, 72.9310, 62, 66, 15),
                     createTelemetry("VH-101", "TRIP-1001", 19.2010, 73.0169, 54, 61, 10),
                     createTelemetry("VH-101", "TRIP-1001", 19.2183, 73.0844, 45, 58, 5)
+                ));
+            }
+
+            if (telemetryRepository.findByTripIdOrderByTimestampAsc("TRIP-1004").isEmpty()) {
+                telemetryRepository.saveAll(List.of(
+                    createTelemetryAt("VH-101", "TRIP-1004", 19.0760, 72.8777, 52, 76, LocalDateTime.now().minusDays(1).minusHours(4)),
+                    createTelemetryAt("VH-101", "TRIP-1004", 19.3560, 73.2100, 61, 70, LocalDateTime.now().minusDays(1).minusHours(3).minusMinutes(10)),
+                    createTelemetryAt("VH-101", "TRIP-1004", 19.6952, 73.5626, 58, 64, LocalDateTime.now().minusDays(1).minusHours(2).minusMinutes(5)),
+                    createTelemetryAt("VH-101", "TRIP-1004", 19.9975, 73.7898, 49, 58, LocalDateTime.now().minusDays(1).minusHours(1).minusMinutes(10))
+                ));
+            }
+
+            if (telemetryRepository.findByTripIdOrderByTimestampAsc("TRIP-1005").isEmpty()) {
+                telemetryRepository.saveAll(List.of(
+                    createTelemetryAt("VH-104", "TRIP-1005", 12.9716, 77.5946, 44, 81, LocalDateTime.now().minusDays(2).minusHours(3)),
+                    createTelemetryAt("VH-104", "TRIP-1005", 12.9698, 77.7499, 83, 74, LocalDateTime.now().minusDays(2).minusHours(2).minusMinutes(10)),
+                    createTelemetryAt("VH-104", "TRIP-1005", 13.1007, 77.5963, 46, 69, LocalDateTime.now().minusDays(2).minusHours(0).minusMinutes(45))
+                ));
+            }
+
+            if (alertRepository.findById("AL-4").isEmpty()) {
+                alertRepository.save(new Alert(
+                    "AL-4",
+                    AlertCategory.SAFETY,
+                    AlertSeverity.MEDIUM,
+                    AlertLifecycleStatus.RESOLVED,
+                    "Brief overspeed event",
+                    "Driver DR-204 briefly exceeded the safe speed threshold during TRIP-1005.",
+                    "telemetry",
+                    "VH-104",
+                    "TRIP-1005",
+                    "VH-104",
+                    "{\"speed\":83}",
+                    LocalDateTime.now().minusDays(2).minusHours(2),
+                    LocalDateTime.now().minusDays(2).minusHours(1).minusMinutes(50)
                 ));
             }
         };
@@ -277,6 +385,18 @@ public class DataSeeder {
         telemetry.setSpeed(speed);
         telemetry.setFuelLevel(fuelLevel);
         telemetry.setTimestamp(LocalDateTime.now().minusMinutes(minutesAgo));
+        return telemetry;
+    }
+
+    private Telemetry createTelemetryAt(String vehicleId, String tripId, double latitude, double longitude, double speed, double fuelLevel, LocalDateTime timestamp) {
+        Telemetry telemetry = new Telemetry();
+        telemetry.setVehicleId(vehicleId);
+        telemetry.setTripId(tripId);
+        telemetry.setLatitude(latitude);
+        telemetry.setLongitude(longitude);
+        telemetry.setSpeed(speed);
+        telemetry.setFuelLevel(fuelLevel);
+        telemetry.setTimestamp(timestamp);
         return telemetry;
     }
 

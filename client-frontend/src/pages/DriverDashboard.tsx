@@ -22,8 +22,9 @@ import type {
 import type { StopStatus } from '../types'
 
 
-import { useTripStore } from '../store/useTripStore'
 import { useTripWebSocket } from '../hooks/useTripWebSocket'
+import { useAppDispatch, useAppSelector } from '../store/hooks'
+import { setActiveTrip } from '../store/tripSlice'
 
 interface ChecklistState {
   pickupCompleted: boolean
@@ -61,9 +62,9 @@ function formatDateTime(value?: string | null) {
 }
 
 export function DriverDashboard() {
-  const activeTrip = useTripStore((state) => state.activeTrip)
-  const setActiveTrip = useTripStore((state) => state.setActiveTrip)
-  const realTimeTelemetry = useTripStore((state) => state.telemetry)
+  const dispatch = useAppDispatch()
+  const activeTrip = useAppSelector((state) => state.trip.activeTrip)
+  const realTimeTelemetry = useAppSelector((state) => state.trip.telemetry)
   
   // Connect to WebSocket for the active trip
   useTripWebSocket(activeTrip?.tripId)
@@ -110,7 +111,7 @@ export function DriverDashboard() {
                    || allTrips[0] 
                    || null
       
-      setActiveTrip(current)
+      dispatch(setActiveTrip(current))
       if (current) {
         await refreshTripData(current.tripId)
         if (current.status === 'COMPLETED') {
@@ -124,7 +125,7 @@ export function DriverDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [refreshTripData, setActiveTrip])
+  }, [dispatch, refreshTripData])
 
   useEffect(() => {
     void loadData()

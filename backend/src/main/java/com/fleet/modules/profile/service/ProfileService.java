@@ -6,6 +6,8 @@ import com.fleet.modules.auth.repository.AppUserRepository;
 import com.fleet.modules.auth.service.AuthSessionService;
 import com.fleet.modules.auth.service.CurrentUserService;
 import com.fleet.modules.audit.service.AuditLogService;
+import com.fleet.modules.driver.entity.Driver;
+import com.fleet.modules.driver.repository.DriverRepository;
 import com.fleet.modules.profile.dto.ChangePasswordRequest;
 import com.fleet.modules.profile.dto.ProfileDTO;
 import com.fleet.modules.profile.dto.UpdateProfileRequest;
@@ -24,19 +26,22 @@ public class ProfileService {
     private final AuthSessionService authSessionService;
     private final PasswordEncoder passwordEncoder;
     private final AuditLogService auditLogService;
+    private final DriverRepository driverRepository;
 
     public ProfileService(
         AppUserRepository appUserRepository,
         CurrentUserService currentUserService,
         AuthSessionService authSessionService,
         PasswordEncoder passwordEncoder,
-        AuditLogService auditLogService
+        AuditLogService auditLogService,
+        DriverRepository driverRepository
     ) {
         this.appUserRepository = appUserRepository;
         this.currentUserService = currentUserService;
         this.authSessionService = authSessionService;
         this.passwordEncoder = passwordEncoder;
         this.auditLogService = auditLogService;
+        this.driverRepository = driverRepository;
     }
 
     public ProfileDTO getProfile() {
@@ -126,11 +131,22 @@ public class ProfileService {
     private ProfileDTO toDto(AppUser user) {
         return new ProfileDTO(
             user.getId(),
-            user.getName(),
+            resolveDisplayName(user),
             AppRole.fromStoredValue(user.getRole()).name(),
             user.getEmail(),
             user.getAssignedRegion() == null ? "" : user.getAssignedRegion()
         );
+    }
+
+    private String resolveDisplayName(AppUser user) {
+        if (AppRole.fromStoredValue(user.getRole()) != AppRole.DRIVER) {
+            return user.getName();
+        }
+
+        return driverRepository.findById(user.getId())
+            .map(Driver::getName)
+            .filter(name -> name != null && !name.isBlank())
+            .orElse(user.getName());
     }
 
     private boolean isBlank(String value) {

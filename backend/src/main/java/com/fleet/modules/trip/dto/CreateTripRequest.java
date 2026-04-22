@@ -1,6 +1,7 @@
 package com.fleet.modules.trip.dto;
 
 import com.fleet.modules.trip.entity.TripPriority;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -14,6 +15,7 @@ public record CreateTripRequest(
     @NotBlank String assignedDriverId,
     @NotBlank String source,
     @NotBlank String destination,
+    @NotBlank @Email String recipientEmail,
     @NotNull @Size(min = 1) List<TripStopDTO> stops,
 
     @NotNull LocalDateTime plannedStartTime,

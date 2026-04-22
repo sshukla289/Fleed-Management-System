@@ -8,6 +8,8 @@ interface ActionPanelProps {
   pauseReason: string
   preTripChecklistComplete: boolean
   postTripChecklistComplete: boolean
+  podReadyForCompletion: boolean
+  podTimestamp?: string | null
   preTripProgressLabel: string
   postTripProgressLabel: string
   onPauseReasonChange: (value: string) => void
@@ -58,6 +60,8 @@ export function ActionPanel({
   pauseReason,
   preTripChecklistComplete,
   postTripChecklistComplete,
+  podReadyForCompletion,
+  podTimestamp,
   preTripProgressLabel,
   postTripProgressLabel,
   onPauseReasonChange,
@@ -81,9 +85,11 @@ export function ActionPanel({
     : trip.status === 'IN_PROGRESS'
       ? allStopsCompleted
         ? postTripChecklistComplete
-          ? 'All stops are closed and post-trip sign-off is complete.'
+          ? podReadyForCompletion
+            ? 'All stops are closed and legally reliable POD evidence has been captured.'
+            : 'Capture proof of delivery to unlock trip completion.'
           : 'Finish the post-trip checklist to unlock trip completion.'
-        : 'Pause anytime. Trip completion unlocks after all stops are closed and post-trip sign-off is done.'
+        : 'Pause anytime. Trip completion unlocks after all stops are closed, post-trip sign-off is done, and POD is verified.'
       : trip.status === 'PAUSED'
         ? 'Resume when the vehicle is ready to continue the route.'
         : 'Actions update automatically based on the trip lifecycle.'
@@ -108,6 +114,16 @@ export function ActionPanel({
           <span>Post-trip checklist</span>
           <span className={postTripChecklistComplete ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700'}>
             {postTripProgressLabel}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>Proof of delivery</span>
+          <span className={podReadyForCompletion ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700'}>
+            {podReadyForCompletion
+              ? podTimestamp
+                ? `Verified ${new Date(podTimestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
+                : 'Verified'
+              : 'Pending'}
           </span>
         </div>
       </div>
@@ -163,7 +179,7 @@ export function ActionPanel({
           <ActionButton
             label="Complete Trip"
             tone={allStopsCompleted ? 'success' : 'warning'}
-            disabled={busy || !allStopsCompleted || !postTripChecklistComplete}
+            disabled={busy || !allStopsCompleted || !postTripChecklistComplete || !podReadyForCompletion}
             busy={actionInProgress === 'complete'}
             onClick={onComplete}
           />
@@ -185,7 +201,7 @@ export function ActionPanel({
       {trip.status === 'COMPLETED' && (
         <div className="rounded-2xl bg-green-50 p-4 text-green-800 ring-1 ring-green-200">
           <p className="text-sm font-semibold">Trip completed successfully</p>
-          <p className="mt-1 text-sm text-green-700">All stops have been closed and delivery execution is complete.</p>
+          <p className="mt-1 text-sm text-green-700">All stops have been closed and delivery execution is complete with verified POD evidence.</p>
         </div>
       )}
     </motion.div>

@@ -13,7 +13,7 @@ RUN mvn -q -DskipTests dependency:go-offline
 
 FROM base AS dev
 EXPOSE 8080
-CMD ["sh", "-c", "mvn -q fizzed-watcher:run -DskipTests & mvn -q -DskipTests spring-boot:run"]
+CMD ["sh", "-c", "mvn -q fizzed-watcher:run -Dmaven.test.skip=true & mvn -q -Dmaven.test.skip=true spring-boot:run"]
 
 FROM base AS build
 COPY --chown=spring:spring src ./src

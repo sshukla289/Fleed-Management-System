@@ -41,6 +41,7 @@ public class DriverService {
             request.licenseNumber(),
             request.licenseExpiryDate(),
             request.assignedShift(),
+            request.phone(),
             request.assignedVehicleId(),
             request.hoursDrivenToday()
         );
@@ -57,6 +58,7 @@ public class DriverService {
             normalizeNullable(request.licenseNumber()),
             normalizeNullable(request.licenseExpiryDate()),
             normalizeShift(request.assignedShift()),
+            normalizePhone(request.phone()),
             normalizedVehicleId,
             request.hoursDrivenToday()
         );
@@ -95,6 +97,7 @@ public class DriverService {
             request.licenseNumber(),
             request.licenseExpiryDate(),
             request.assignedShift(),
+            request.phone(),
             request.assignedVehicleId(),
             request.hoursDrivenToday()
         );
@@ -111,6 +114,7 @@ public class DriverService {
         driver.setLicenseNumber(normalizeNullable(request.licenseNumber()));
         driver.setLicenseExpiryDate(normalizeNullable(request.licenseExpiryDate()));
         driver.setAssignedShift(normalizeShift(request.assignedShift()));
+        driver.setPhone(normalizePhone(request.phone()));
         driver.setAssignedVehicleId(normalizedVehicleId);
         driver.setHoursDrivenToday(request.hoursDrivenToday());
         return toDto(driverRepository.save(driver));
@@ -133,6 +137,7 @@ public class DriverService {
             safe(driver.getLicenseNumber()),
             safe(driver.getLicenseExpiryDate()),
             safe(driver.getAssignedShift()),
+            safe(driver.getPhone()),
             safe(driver.getAssignedVehicleId()),
             driver.getHoursDrivenToday()
         );
@@ -166,6 +171,7 @@ public class DriverService {
         String licenseNumber,
         String licenseExpiryDate,
         String assignedShift,
+        String phone,
         String assignedVehicleId,
         double hoursDrivenToday
     ) {
@@ -196,10 +202,23 @@ public class DriverService {
         if (!isBlank(assignedShift) && assignedShift.trim().length() > 40) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assigned shift is too long.");
         }
+        if (phone != null) {
+            String normalizedPhone = phone.trim();
+            if (normalizedPhone.length() > 20) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number is too long.");
+            }
 
+            if (!normalizedPhone.isEmpty() && !normalizedPhone.matches("^[0-9+()\\-\\s]{7,20}$")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number format is invalid.");
+            }
+        }
         if (assignedVehicleId != null && assignedVehicleId.length() > 255) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assigned vehicle ID is too long.");
         }
+    }
+
+    private String normalizePhone(String value) {
+        return isBlank(value) ? null : value.trim();
     }
 
     private String normalizeNullable(String value) {

@@ -1,15 +1,32 @@
 import {
   completeTrip as apiCompleteTrip,
+  fetchTripFuelLogs as apiFetchTripFuelLogs,
+  createPod as apiCreatePod,
   fetchTripChecklists as apiFetchTripChecklists,
+  fetchTripPod as apiFetchTripPod,
   fetchTripTelemetry,
   fetchTrips,
   pauseTrip as apiPauseTrip,
+  resendTripOtp as apiResendTripOtp,
   resumeTrip as apiResumeTrip,
   startTrip as apiStartTrip,
   updateTripChecklist as apiUpdateTripChecklist,
   updateStopStatus as apiUpdateStopStatus,
+  validateTripOtp as apiValidateTripOtp,
 } from './apiService'
-import type { ChecklistType, CompleteTripInput, StopStatus, Trip, TripChecklist, TripTelemetryPoint, UpdateTripChecklistInput } from '../types'
+import type {
+  ChecklistType,
+  CompleteTripInput,
+  CreatePodInput,
+  FuelLog,
+  ProofOfDelivery,
+  StopStatus,
+  Trip,
+  TripChecklist,
+  TripTelemetryPoint,
+  TripOtpSummary,
+  UpdateTripChecklistInput,
+} from '../types'
 import type { ExecutionStop, ExecutionStopStatus, ExecutionTrip } from '../types/tripExecution'
 
 const ACTIVE_EXECUTION_STATUSES = new Set<Trip['status']>(['DISPATCHED', 'IN_PROGRESS', 'PAUSED'])
@@ -109,6 +126,8 @@ export function mapTripToExecutionTrip(trip: Trip): ExecutionTrip {
     pausedAt: trip.pausedAt ?? null,
     pauseReason: trip.pauseReason ?? null,
     completedAt: trip.actualEndTime ?? null,
+    otp: trip.otp ?? null,
+    pod: trip.pod ?? null,
   }
 }
 
@@ -171,6 +190,14 @@ export async function startTrip(tripId: string): Promise<ExecutionTrip> {
   return mapTripToExecutionTrip(await apiStartTrip(tripId))
 }
 
+export async function resendTripOtp(tripId: string): Promise<TripOtpSummary> {
+  return apiResendTripOtp(tripId)
+}
+
+export async function validateTripOtp(tripId: string, otp: string): Promise<TripOtpSummary> {
+  return apiValidateTripOtp(tripId, { otp })
+}
+
 export async function pauseTrip(tripId: string, reason?: string): Promise<ExecutionTrip> {
   return mapTripToExecutionTrip(await apiPauseTrip(tripId, reason))
 }
@@ -188,6 +215,18 @@ export async function completeTrip(trip: ExecutionTrip): Promise<ExecutionTrip> 
   }
 
   return mapTripToExecutionTrip(await apiCompleteTrip(trip.id, completionPayload))
+}
+
+export async function submitProofOfDelivery(input: CreatePodInput): Promise<ProofOfDelivery> {
+  return apiCreatePod(input)
+}
+
+export async function fetchTripPod(tripId: string): Promise<ProofOfDelivery | undefined> {
+  return apiFetchTripPod(tripId)
+}
+
+export async function fetchTripFuelLogs(tripId: string): Promise<FuelLog[]> {
+  return apiFetchTripFuelLogs(tripId)
 }
 
 export async function updateTripChecklist(

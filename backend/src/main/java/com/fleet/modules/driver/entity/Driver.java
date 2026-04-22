@@ -17,6 +17,7 @@ public class Driver {
     private String licenseNumber;
     private String licenseExpiryDate;
     private String assignedShift;
+    private String phone;
     private String assignedVehicleId;
     private double hoursDrivenToday;
 
@@ -31,6 +32,7 @@ public class Driver {
         String licenseNumber,
         String licenseExpiryDate,
         String assignedShift,
+        String phone,
         String assignedVehicleId,
         double hoursDrivenToday
     ) {
@@ -41,6 +43,7 @@ public class Driver {
         this.licenseNumber = licenseNumber;
         this.licenseExpiryDate = licenseExpiryDate;
         this.assignedShift = assignedShift;
+        this.phone = phone;
         this.assignedVehicleId = assignedVehicleId;
         this.hoursDrivenToday = hoursDrivenToday;
     }
@@ -99,6 +102,14 @@ public class Driver {
 
     public void setAssignedShift(String assignedShift) {
         this.assignedShift = assignedShift;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
     }
 
     public String getAssignedVehicleId() {

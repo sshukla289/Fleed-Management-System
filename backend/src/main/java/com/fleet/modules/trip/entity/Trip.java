@@ -27,6 +27,7 @@ public class Trip {
     private String assignedDriverId;
     private String source;
     private String destination;
+    private String recipientEmail;
 
     @Enumerated(EnumType.STRING)
     private TripStatus status;
@@ -100,6 +101,7 @@ public class Trip {
         this.assignedDriverId = assignedDriverId;
         this.source = source;
         this.destination = destination;
+        this.recipientEmail = null;
         this.status = status;
         this.priority = priority;
         this.dispatchStatus = dispatchStatus;
@@ -163,6 +165,14 @@ public class Trip {
 
     public void setDestination(String destination) {
         this.destination = destination;
+    }
+
+    public String getRecipientEmail() {
+        return recipientEmail;
+    }
+
+    public void setRecipientEmail(String recipientEmail) {
+        this.recipientEmail = recipientEmail;
     }
 
     public TripStatus getStatus() {

@@ -18,8 +18,8 @@ import {
   startTrip,
   validateTrip,
 } from '../services/apiService'
-import { useTripStore } from '../store/useTripStore'
 import { useTripWebSocket } from '../hooks/useTripWebSocket'
+import { useAppSelector } from '../store/hooks'
 import type {
 
   Alert,
@@ -229,7 +229,7 @@ export function Trips() {
     }
   }, [selectedTrip])
 
-  const realTimeTelemetry = useTripStore((state) => state.telemetry)
+  const realTimeTelemetry = useAppSelector((state) => state.trip.telemetry)
 
   
   // Use our real-time hook

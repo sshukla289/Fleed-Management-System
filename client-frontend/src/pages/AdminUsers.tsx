@@ -193,7 +193,10 @@ export function AdminUsersPage() {
     return () => window.removeEventListener('keydown', handleEscape)
   }, [modalMode, closeModal])
 
-  const users = usersQuery.data?.content ?? []
+  const users = useMemo(
+    () => usersQuery.data?.content ?? [],
+    [usersQuery.data?.content],
+  )
   const totalUsers = usersQuery.data?.totalElements ?? 0
   const totalPages = usersQuery.data?.totalPages ?? 0
   const currentPage = usersQuery.data?.page ?? page

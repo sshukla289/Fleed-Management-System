@@ -21,12 +21,24 @@ function checklistHint(type: ChecklistType) {
     : 'Required before the driver can complete the trip.'
 }
 
-function isTripUnderway(status: ExecutionTrip['status']) {
-  return status === 'IN_PROGRESS' || status === 'PAUSED' || status === 'COMPLETED'
+function canEditChecklist(type: ChecklistType, trip: ExecutionTrip) {
+  if (type === 'PRE') {
+    return trip.status === 'DISPATCHED'
+  }
+
+  return trip.status === 'IN_PROGRESS' || trip.status === 'PAUSED'
 }
 
-function isStepLocked(type: ChecklistType, trip: ExecutionTrip) {
-  return type === 'POST' && !isTripUnderway(trip.status)
+function lockedStepMessage(type: ChecklistType, trip: ExecutionTrip) {
+  if (type === 'PRE' && trip.status !== 'DISPATCHED') {
+    return 'Pre-trip checklist is read-only after the trip starts.'
+  }
+
+  if (type === 'POST' && trip.status === 'COMPLETED') {
+    return 'Post-trip checklist becomes read-only once the trip is completed.'
+  }
+
+  return 'Post-trip sign-off unlocks once the trip is underway.'
 }
 
 export function TripChecklistPanel({
@@ -67,20 +79,19 @@ export function TripChecklistPanel({
           const checklist = checklists.find((entry) => entry.type === type)
           const completedItems = checklist?.items.filter((item) => item.completed).length ?? 0
           const totalItems = checklist?.items.length ?? 0
-          const locked = isStepLocked(type, trip)
+          const locked = !canEditChecklist(type, trip)
           const active = selectedType === type
 
           return (
             <button
               key={type}
               type="button"
-              onClick={() => !locked && onSelectType(type)}
-              disabled={locked}
+              onClick={() => onSelectType(type)}
               className={`rounded-3xl border p-4 text-left transition ${
                 active
                   ? 'border-blue-300 bg-blue-50 shadow-sm'
                   : locked
-                    ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
+                    ? 'border-slate-200 bg-slate-50'
                     : 'border-slate-200 bg-white hover:border-slate-300'
               }`}
             >
@@ -132,16 +143,16 @@ export function TripChecklistPanel({
             </span>
           </div>
 
-          {isStepLocked(selectedChecklist.type, trip) ? (
+          {!canEditChecklist(selectedChecklist.type, trip) ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Post-trip sign-off unlocks once the trip is underway.
+              {lockedStepMessage(selectedChecklist.type, trip)}
             </div>
           ) : (
             <div className="mt-4 space-y-3">
               {selectedChecklist.items.map((item) => (
                 <label
                   key={item.key}
-                  className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition ${
+                  className={`flex items-center gap-3 rounded-2xl border px-4 py-3 transition ${
                     item.completed
                       ? 'border-emerald-200 bg-emerald-50'
                       : 'border-slate-200 bg-white hover:border-blue-200'
@@ -162,7 +173,9 @@ export function TripChecklistPanel({
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-500">
-              {savingType === selectedChecklist.type
+              {!canEditChecklist(selectedChecklist.type, trip)
+                ? lockedStepMessage(selectedChecklist.type, trip)
+                : savingType === selectedChecklist.type
                 ? 'Saving checklist...'
                 : selectedChecklist.completed
                   ? 'Checklist complete. The matching trip action is now unlocked.'
